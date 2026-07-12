@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>smsdat — SMS/GG Data Tools</title>
+<style>
+  :root {
+    --bg:#1a1a1e; --panel:#25252c; --panel2:#2d2d36; --border:#3a3a45;
+    --fg:#e8e8ea; --muted:#8a8a95; --accent:#f0a020; --accent2:#5cb8ff;
+    --good:#4aaa4a; --warn:#e0a020; --bad:#e05050;
+    --bar-bg:#1f1f26; --bar-fill:#5cb8ff;
+    --bar-low:#4aaa4a; --bar-mid:#e0a020; --bar-high:#e05050;
+    --sym-code:#9cd48a; --sym-data:#e0a888; --sym-header:#c8a0e0;
+    --same-bg:#22262a; --same-fg:#4a5560;
+    --diff-bg:#5a2020; --diff-v1:#ffb0b0; --diff-v2:#a0ffa0;
+    --struct:#c060c0;
+  }
+
+  /* ========== Tab system ========== */
+  .app-tabs {
+    display:flex; gap:2px; margin-bottom:14px;
+    border-bottom:1px solid var(--border);
+  }
+  .app-tab {
+    background:transparent; color:var(--muted); border:0;
+    padding:10px 20px; cursor:pointer;
+    font-weight:600; font-size:12px;
+    border-radius:0; border-bottom:2px solid transparent;
+    letter-spacing:.5px; text-transform:uppercase;
+    transition:color .12s, border-color .12s;
+  }
+  .app-tab:hover { color:var(--fg); }
+  .app-tab.active {
+    color:var(--accent); border-bottom-color:var(--accent);
+  }
+  .tab-content[hidden] { display:none; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:16px;
+    background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:13px;
+  }
+  h1 { margin:0 0 12px; font-size:18px; color:var(--accent); }
+  h2 { margin:0 0 8px; font-size:14px; color:var(--accent2); }
+
+  .top { margin-bottom:14px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px; }
+  label { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px; }
+  input[type=file] {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--border);
+    border-radius:4px; padding:6px; width:100%; font-size:12px;
+  }
+  input[type=file]::file-selector-button {
+    background:var(--accent); color:#000; border:0; padding:4px 10px;
+    border-radius:3px; margin-right:8px; cursor:pointer; font-weight:600;
+  }
+  input[type=text] {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--border);
+    border-radius:4px; padding:6px 10px; font-size:12px; min-width:220px;
+    font-family:inherit;
+  }
+  .row { margin-bottom:8px; }
+  .status { font-size:11px; color:var(--muted); margin-top:6px; min-height:14px; }
+  .status.ok { color:var(--good); }
+  .status.err { color:var(--bad); }
+
+  .controls {
+    display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  button {
+    background:var(--accent); color:#000; border:0;
+    padding:8px 16px; border-radius:4px; cursor:pointer;
+    font-weight:600; font-size:12px;
+  }
+  button:disabled { background:#555; color:#888; cursor:not-allowed; }
+  button.sec { background:var(--panel2); color:var(--fg); border:1px solid var(--border); }
+  button.pick { display:block; width:100%; text-align:left; padding:8px 12px; font-weight:500; font-size:12px; }
+  button.pick:hover { border-color:var(--accent); }
+
+  .filters { display:flex; gap:14px; align-items:center; font-size:12px; flex-wrap:wrap; }
+  .filters label { display:inline-flex; align-items:center; gap:5px; margin:0; text-transform:none; letter-spacing:normal; color:var(--fg); font-size:12px; }
+
+  .summary {
+    padding:12px 14px; background:var(--panel); border:1px solid var(--border);
+    border-radius:6px; margin-bottom:14px; font-size:12px;
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:12px;
+  }
+  .summary .stat { display:flex; flex-direction:column; gap:2px; }
+  .summary .stat .k { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .summary .stat .v { color:var(--accent); font-weight:600; font-size:16px; font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace; font-variant-numeric:tabular-nums; }
+  .summary .stat .sub { color:var(--muted); font-size:11px; }
+
+  .banks { display:grid; gap:12px; }
+  .bank {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:6px; overflow:hidden;
+  }
+  .bank-head {
+    display:flex; align-items:center; gap:14px;
+    padding:10px 14px; background:var(--panel2);
+    cursor:pointer; user-select:none;
+    border-bottom:1px solid var(--border);
+  }
+  .bank-head:hover { background:#333340; }
+  .bank-head .caret {
+    width:10px; height:10px; display:inline-block;
+    border-right:2px solid var(--accent); border-bottom:2px solid var(--accent);
+    transform:rotate(-45deg); transition:transform .15s;
+  }
+  .bank.open .bank-head .caret { transform:rotate(45deg); }
+  .bank-head .title {
+    color:var(--accent); font-weight:700; font-size:14px;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    min-width:110px;
+  }
+  .bank-head .range {
+    color:var(--muted); font-size:11px;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+  }
+  .bank-head .bar-wrap {
+    flex:1; background:var(--bar-bg); border-radius:3px;
+    height:16px; position:relative; overflow:hidden;
+    border:1px solid var(--border); min-width:180px;
+  }
+  .bank-head .bar-fill {
+    position:absolute; left:0; top:0; height:100%;
+    transition:width .3s;
+  }
+  .bank-head .bar-fill.low  { background:var(--bar-low); }
+  .bank-head .bar-fill.mid  { background:var(--bar-mid); }
+  .bank-head .bar-fill.high { background:var(--bar-high); }
+  .bank-head .bar-txt {
+    position:absolute; left:0; right:0; top:0; bottom:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px; font-weight:600; color:#000;
+    text-shadow:0 0 2px rgba(255,255,255,.4);
+    font-variant-numeric:tabular-nums;
+  }
+  .bank-head .stats {
+    display:flex; gap:14px; align-items:center;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px; font-variant-numeric:tabular-nums;
+    color:var(--muted); min-width:220px; justify-content:flex-end;
+  }
+  .bank-head .stats .used { color:var(--fg); }
+  .bank-head .stats .free { color:var(--good); }
+  .bank-head .stats .cnt  { color:var(--accent2); }
+
+  .bank.is-ram { border-color:var(--accent2); }
+  .bank.is-ram .bank-head { background:#1f2833; }
+  .bank.is-ram .bank-head:hover { background:#25314a; }
+
+  .bank .warn-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; margin-left:6px;
+    background:var(--warn); color:#000; border-radius:50%;
+    font-size:11px; font-weight:700; cursor:help;
+  }
+
+  /* ================= Treemap ================= */
+  .treemap-wrap {
+    padding:12px 14px 4px; background:#1a1a20;
+    border-bottom:1px solid var(--border);
+  }
+  .treemap-svg {
+    display:block; width:100%; height:220px;
+    border-radius:4px; background:#0e0e12;
+  }
+  .treemap-svg .tm-tile { cursor:pointer; }
+  .treemap-svg .tm-tile rect { transition:opacity .1s; }
+  .treemap-svg .tm-tile:hover rect { opacity:0.75; stroke:var(--accent); stroke-width:1.5; }
+  .treemap-svg .tm-tile.tm-free rect { fill:#2a2a35; }
+  .treemap-svg .tm-tile text {
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    fill:#0e0e12; font-weight:600; pointer-events:none;
+    -webkit-font-smoothing:antialiased;
+  }
+  .treemap-svg .tm-tile.tm-free text { fill:var(--muted); }
+
+  #tmTooltip {
+    position:fixed; display:none; pointer-events:none;
+    background:#0e0e12; border:1px solid var(--accent);
+    border-radius:6px; padding:8px 10px;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px; line-height:1.5;
+    box-shadow:0 6px 24px rgba(0,0,0,.6);
+    z-index:1000; max-width:340px;
+    font-variant-numeric:tabular-nums;
+  }
+  #tmTooltip .tt-name { color:var(--accent2); font-weight:700; font-size:12px; margin-bottom:2px; }
+  #tmTooltip .tt-addr { color:var(--accent); }
+  #tmTooltip .tt-size { color:var(--fg); }
+  #tmTooltip .tt-pct  { color:var(--muted); }
+  #tmTooltip .tt-area { color:var(--sym-header); font-size:10px; }
+
+  .warn-banner {
+    padding:10px 14px; background:#3a2e12; border:1px solid var(--warn);
+    border-radius:6px; margin-bottom:12px; font-size:12px;
+    color:#f0d080; line-height:1.5;
+  }
+  .warn-banner b { color:var(--warn); }
+  .warn-banner code { background:#000; padding:1px 5px; border-radius:3px; color:var(--warn); font-size:11px; }
+
+  .bank-body {
+    display:none; padding:0;
+  }
+  .bank.open .bank-body { display:block; }
+
+  table.syms {
+    width:100%; border-collapse:collapse;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px; font-variant-numeric:tabular-nums;
+  }
+  table.syms th {
+    position:sticky; top:0; background:var(--panel2); z-index:1;
+    color:var(--muted); font-weight:600; font-size:10px;
+    text-align:left; padding:6px 12px;
+    text-transform:uppercase; letter-spacing:.5px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer; user-select:none;
+  }
+  table.syms th:hover { color:var(--accent); }
+  table.syms th.sort::after {
+    content:" ▼"; color:var(--accent); font-size:9px;
+  }
+  table.syms th.sort.asc::after { content:" ▲"; }
+  table.syms td {
+    padding:4px 12px; border-bottom:1px solid #1e1e24;
+    vertical-align:middle;
+  }
+  table.syms tr:hover td { background:#2e2e37; }
+  table.syms td.addr { color:var(--accent); width:80px; }
+  table.syms td.name { color:var(--fg); word-break:break-all; }
+  table.syms td.name.code   { color:var(--sym-code); }
+  table.syms td.name.data   { color:var(--sym-data); }
+  table.syms td.name.header { color:var(--sym-header); }
+  table.syms td.area { color:var(--muted); width:120px; font-size:10px; }
+  table.syms td.size {
+    color:var(--accent2); width:110px; text-align:right;
+    font-weight:600;
+    position:relative;
+    padding-right:14px;
+    background-image:linear-gradient(to right,
+      rgba(92,184,255,0.14) 0%,
+      rgba(92,184,255,0.14) var(--pct, 0%),
+      transparent var(--pct, 0%));
+  }
+  table.syms td.size .b { color:var(--muted); font-weight:400; font-size:10px; margin-left:4px; }
+  table.syms tr:hover td.size {
+    background-image:linear-gradient(to right,
+      rgba(240,160,32,0.22) 0%,
+      rgba(240,160,32,0.22) var(--pct, 0%),
+      transparent var(--pct, 0%));
+  }
+  table.syms tr.hidden { display:none; }
+  table.syms tr.end-marker td { opacity:0.55; font-style:italic; }
+  table.syms tr.end-marker td.name::before { content:"◆ "; color:var(--warn); }
+
+  .empty-bank {
+    padding:16px; text-align:center; color:var(--muted); font-style:italic;
+  }
+
+  .hint { color:var(--muted); font-size:11px; margin-top:6px; line-height:1.5; }
+  code { background:#000; padding:1px 5px; border-radius:3px; color:var(--accent); font-size:11px; }
+
+  .drop-hint {
+    border:2px dashed var(--border); border-radius:6px;
+    padding:24px; text-align:center; color:var(--muted);
+    background:var(--panel2); margin-bottom:12px;
+  }
+  .drop-hint.dragover {
+    border-color:var(--accent); background:#3a2e18; color:var(--accent);
+  }
+  .drop-hint b { color:var(--accent2); }
+
+  /* ================================================================
+   * RAM DIFF tab styles (scoped to #tab-rd where noted)
+   * ================================================================ */
+  #tab-rd .summary {
+    padding:10px 12px; background:var(--panel); border:1px solid var(--border);
+    border-radius:6px; margin-bottom:12px; font-size:12px;
+    display:flex; gap:20px; flex-wrap:wrap;
+  }
+  #tab-rd .summary b { color:var(--accent); }
+  #tab-rd .legend { display:flex; gap:16px; align-items:center; font-size:11px; color:var(--muted); }
+  #tab-rd .legend .sw { display:inline-block; width:14px; height:14px; border-radius:2px; vertical-align:middle; margin-right:4px; border:1px solid var(--border); }
+  #tab-rd .legend .sw.same { background:var(--same-bg); }
+  #tab-rd .legend .sw.diff { background:var(--diff-bg); }
+
+  #tab-rd .grid-wrap {
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    overflow:visible;
+  }
+  table.ram-grid {
+    border-collapse:separate; border-spacing:0;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    font-variant-numeric:tabular-nums;
+  }
+  .ram-grid thead th {
+    position:sticky; top:0; background:var(--panel2); z-index:3;
+    color:var(--muted); font-weight:600; font-size:10px;
+    padding:6px 0; text-align:center;
+    border-bottom:1px solid var(--border);
+    width:36px;
+  }
+  .ram-grid thead th.addr-h {
+    position:sticky; left:0; z-index:4; width:70px;
+    text-align:left; padding-left:10px;
+  }
+  .ram-grid td.addr {
+    position:sticky; left:0; z-index:2; background:var(--panel2);
+    color:var(--accent); padding:0 10px;
+    border-right:1px solid var(--border);
+    font-weight:600; font-size:11px;
+    width:70px; text-align:left;
+    height:28px;
+  }
+  .ram-grid td.cell {
+    width:36px; height:28px; padding:0;
+    text-align:center; vertical-align:middle;
+    border-right:1px solid #1e1e24; border-bottom:1px solid #1e1e24;
+    cursor:default;
+    transition:background 60ms, transform 60ms;
+  }
+  .ram-grid td.same { background:var(--same-bg); color:var(--same-fg); }
+  .ram-grid td.diff {
+    background:var(--diff-bg);
+    padding:1px 0; line-height:1.05;
+  }
+  .ram-grid td.diff .v1 { color:var(--diff-v1); font-size:11px; font-weight:500; }
+  .ram-grid td.diff .v2 { color:var(--diff-v2); font-size:11px; font-weight:500; }
+  .ram-grid td.cell:hover {
+    outline:2px solid var(--accent); outline-offset:-2px;
+    position:relative; z-index:1;
+  }
+  .ram-grid td.cell.sym-hi { box-shadow:inset 0 0 0 1px var(--accent2); }
+  .ram-grid th.ascii-h {
+    text-align:left; padding-left:12px;
+    border-left:2px solid var(--border);
+    min-width:180px;
+  }
+  .ram-grid td.ascii {
+    padding:0 12px; height:28px;
+    font-family:"SF Mono","Monaco","Cascadia Mono",monospace;
+    font-size:12px; letter-spacing:1px;
+    color:var(--same-fg);
+    white-space:pre;
+    border-left:2px solid var(--border);
+    vertical-align:middle;
+  }
+  .ram-grid td.ascii.hasdiff {
+    padding:1px 12px; line-height:1.05;
+  }
+  .ram-grid td.ascii .a1 { color:var(--diff-v1); font-size:11px; font-weight:500; display:block; }
+  .ram-grid td.ascii .a2 { color:var(--diff-v2); font-size:11px; font-weight:500; display:block; }
+  .ram-grid tr.hidden { display:none; }
+
+  #rdTooltip {
+    position:fixed; display:none; pointer-events:none;
+    background:#0e0e12; border:1px solid var(--accent);
+    border-radius:6px; padding:8px 10px;
+    font-family:"Menlo","SF Mono","Cascadia Mono","Consolas",monospace;
+    font-size:11px; line-height:1.5;
+    box-shadow:0 6px 24px rgba(0,0,0,.6);
+    z-index:1000; max-width:340px;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    font-variant-numeric:tabular-nums;
+  }
+  #rdTooltip b { font-weight:500; }
+  #rdTooltip .tip-addr { color:var(--accent); font-weight:600; font-size:12px; margin-bottom:4px; }
+  #rdTooltip .tip-val1 { color:var(--diff-v1); }
+  #rdTooltip .tip-val2 { color:var(--diff-v2); }
+  #rdTooltip .tip-sym  { color:var(--accent2); margin-top:5px; font-weight:600; }
+  #rdTooltip .tip-fld  { color:#e0d0e0; }
+  #rdTooltip .tip-type { color:var(--struct); font-size:10px; }
+  #rdTooltip .tip-none { color:var(--muted); font-style:italic; margin-top:5px; }
+  #rdTooltip .tip-word { color:#f0d080; margin-top:3px; }
+</style>
+</head>
+<body>
+
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px">
+  <h1 style="margin:0; font-size:20px">
+    <span style="color:var(--accent)">smsdat</span>
+    <span style="color:var(--muted); font-weight:400; font-size:13px; margin-left:8px" data-i18n="appSub">— Outils données SMS/GG</span>
+  </h1>
+  <button id="btnLang" class="sec" style="min-width:52px" title="Toggle language">EN</button>
+</div>
+
+<div class="app-tabs" role="tablist">
+  <button class="app-tab active" data-tab="ba" role="tab" aria-selected="true">Bank Analyzer</button>
+  <button class="app-tab" data-tab="rd" role="tab" aria-selected="false">RAM Diff</button>
+</div>
+
+<!-- ================================================================
+     TAB: BANK ANALYZER
+     ================================================================ -->
+<div class="tab-content" id="tab-ba">
+
+<div class="top">
+  <div class="panel">
+    <h2 data-i18n="h2File">Fichier symbolique (.sym WLA-DX ou .map SDCC)</h2>
+    <div class="row">
+      <input type="file" id="fileInput" accept=".sym,.map,.txt">
+      <div class="status" id="sFile" data-i18n="noFile">Aucun fichier chargé.</div>
+    </div>
+    <div class="hint" data-i18n="hint">
+      Charge un <code>.sym</code> (WLA-DX) ou un <code>.map</code> (SDCC). Le format est auto-détecté.
+      Chaque bank fait <b>16&nbsp;384 bytes</b> (16&nbsp;KiB).
+    </div>
+  </div>
+</div>
+
+<div class="controls" id="controls" style="display:none">
+  <input type="text" id="search" placeholder="Rechercher un symbole…" data-i18n-ph="searchPh">
+  <div class="filters">
+    <label><span data-i18n="sortLbl">Trier:</span>
+      <select id="sortBy" style="background:var(--panel2); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:4px 8px; font-family:inherit; font-size:12px">
+        <option value="addr" data-i18n="sortAddr">Adresse ↑</option>
+        <option value="size" data-i18n="sortSize">Taille ↓</option>
+        <option value="name" data-i18n="sortName">Nom ↑</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="chkHideEmpty"> <span data-i18n="hideEmpty">Cacher banks vides</span></label>
+    <label><input type="checkbox" id="chkHideZero"> <span data-i18n="hideZero">Cacher symboles taille 0</span></label>
+    <label><input type="checkbox" id="chkTreemap" checked> <span data-i18n="showTreemap">Treemap</span></label>
+    <label><input type="checkbox" id="chkExpandAll"> <span data-i18n="expandAll">Tout déplier</span></label>
+  </div>
+  <button id="btnExport" class="sec" data-i18n="btnExport">Export CSV</button>
+</div>
+
+<div class="summary" id="summary" style="display:none"></div>
+
+<div class="warn-banner" id="warnBanner" style="display:none"></div>
+
+<div class="banks" id="banks"></div>
+
+</div><!-- /tab-ba -->
+
+<!-- ================================================================
+     TAB: RAM DIFF
+     ================================================================ -->
+<div class="tab-content" id="tab-rd" hidden>
+
+  <div class="top">
+    <div class="panel">
+      <h2 data-i18n="h2Bin">1. Fichiers binaires (dump RAM 8 Kio)</h2>
+      <div class="row">
+        <label data-i18n="lblBin1">BIN #1 (référence)</label>
+        <button class="sec pick" data-pick="bin1" data-i18n="btnPick">Choisir un fichier…</button>
+        <div class="status" id="sBin1"></div>
+      </div>
+      <div class="row">
+        <label data-i18n="lblBin2">BIN #2 (à comparer)</label>
+        <button class="sec pick" data-pick="bin2" data-i18n="btnPick">Choisir un fichier…</button>
+        <div class="status" id="sBin2"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 data-i18n="h2Ctx">2. Fichiers de contexte SDCC (optionnels)</h2>
+      <div class="row">
+        <label data-i18n="lblMap">rom.map (SDCC linker map)</label>
+        <button class="sec pick" data-pick="map" data-i18n="btnPick">Choisir un fichier…</button>
+        <div class="status" id="sMap"></div>
+      </div>
+      <div class="row">
+        <label data-i18n="lblHdr">_structures.h (typedefs + extern __at)</label>
+        <button class="sec pick" data-pick="hdr" data-i18n="btnPick">Choisir un fichier…</button>
+        <div class="status" id="sHdr"></div>
+      </div>
+      <div class="hint" data-i18n="hintCtx">
+        Charge <code>rom.map</code> et <code>_structures.h</code> pour enrichir le tooltip.
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="rdBtnDiff" data-i18n="btnDiff" disabled>Générer la grille</button>
+    <button id="rdBtnClear" data-i18n="btnClear" class="sec">Effacer</button>
+    <div class="filters">
+      <label><input type="checkbox" id="rdChkOnlyDiff"> <span data-i18n="chkOnlyDiff">Masquer lignes sans différence</span></label>
+      <label><input type="checkbox" id="rdChkColorSym"> <span data-i18n="chkColorSym">Colorer par symbole</span></label>
+      <span class="legend">
+        <span><span class="sw same"></span><span data-i18n="legendSame">identique</span></span>
+        <span><span class="sw diff"></span><span data-i18n="legendDiff">différent (v1 / v2)</span></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="summary" id="rdSummary" style="display:none"></div>
+
+  <div class="grid-wrap">
+    <table class="ram-grid" id="rdGrid"></table>
+  </div>
+
+</div><!-- /tab-rd -->
+
+<div id="tmTooltip"></div>
+<div id="rdTooltip"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+ * SHARED — language toggle + tab switching
+ * ============================================================ */
+let LANG = 'fr';
+const langCallbacks = [];
+
+function applyAllI18n() {
+  document.documentElement.lang = LANG;
+  const btn = document.getElementById('btnLang');
+  if (btn) btn.textContent = LANG === 'fr' ? 'EN' : 'FR';
+  const sub = document.querySelector('[data-i18n="appSub"]');
+  if (sub) sub.textContent = LANG === 'fr' ? '— Outils données SMS/GG' : '— SMS/GG data tools';
+  document.title = LANG === 'fr' ? 'smsdat — Outils données SMS/GG' : 'smsdat — SMS/GG Data Tools';
+  for (const cb of langCallbacks) { try { cb(); } catch (e) { console.error(e); } }
+}
+
+document.getElementById('btnLang').addEventListener('click', () => {
+  LANG = LANG === 'fr' ? 'en' : 'fr';
+  applyAllI18n();
+});
+
+document.querySelectorAll('.app-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll('.app-tab').forEach(t => {
+      const active = t === btn;
+      t.classList.toggle('active', active);
+      t.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.hidden = c.id !== 'tab-' + target;
+    });
+  });
+});
+
+/* ============================================================
+ * BANK ANALYZER module
+ * ============================================================ */
+(() => {
+
+/* ============================================================
+ * i18n
+ * ============================================================ */
+const I18N = {
+  fr: {
+    title: "SMS ROM Bank Analyzer",
+    h2File: "Fichier symbolique (.sym WLA-DX ou .map SDCC)",
+    noFile: "Aucun fichier chargé.",
+    hint: `Charge un <code>.sym</code> (WLA-DX) ou un <code>.map</code> (SDCC). Le format est auto-détecté. Chaque bank fait <b>16 384 bytes</b> (16 KiB), la RAM <b>8 192 bytes</b>.<br><b>WLA-DX</b> : le fichier doit être généré avec <code>wlalink -A -S</code> (l'option <code>-S</code> écrit la section <code>[definitions]</code> avec la taille de chaque symbole).<br>Pour une occupation exacte, ajoute un label sentinelle <code>_end_bank_N:</code> à la fin des données de chaque bank (ex. <code>_end_bank_03:</code>, <code>_end_bank_04:</code>...) — sans quoi le dernier label de chaque bank aura sa taille gonflée jusqu'à la fin du bank par WLA-DX.`,
+    searchPh: "Rechercher un symbole…",
+    sortLbl: "Trier:",
+    sortAddr: "Adresse ↑",
+    sortSize: "Taille ↓",
+    sortName: "Nom ↑",
+    hideEmpty: "Cacher banks vides",
+    hideZero: "Cacher symboles taille 0",
+    showTreemap: "Treemap",
+    expandAll: "Tout déplier",
+    tmFree: "Espace libre",
+    btnExport: "Export CSV",
+    parsed: (fmt, n) => `Format <b>${fmt}</b> — ${n} symbole(s) analysé(s).`,
+    errFormat: "Format non reconnu.",
+    errNoDefs: `Fichier .sym incomplet : la section <code>[definitions]</code> est absente. Sans elle, les tailles des symboles ne peuvent pas être calculées correctement (le dernier symbole de chaque bank aurait une taille inconnue et l'occupation serait sous-estimée).<br>Régénère le fichier avec <code>wlalink -A -S</code> — l'option <code>-S</code> ajoute les tailles.`,
+    statBanks: "Banks utilisés",
+    statSyms: "Symboles",
+    statUsed: "ROM utilisée",
+    statFree: "ROM libre",
+    statAvg: "% moyen d'occupation",
+    statRam: "RAM utilisée",
+    ramTitle: "RAM",
+    bank: (n) => `Bank ${n}`,
+    range: (a, b) => `[${a}–${b}]`,
+    used: (b) => `${b} B utilisés`,
+    free: (b) => `${b} B libres`,
+    cnt: (n) => `${n} sym.`,
+    thAddr: "Adresse",
+    thName: "Symbole",
+    thArea: "Zone",
+    thSize: "Taille",
+    empty: "Aucun symbole dans ce bank.",
+    filterEmpty: "Aucun symbole ne correspond à la recherche.",
+    warnNoEndMarker: (list, n) => `<b>⚠ Occupation potentiellement surestimée</b> — ${n === 1 ? 'la bank' : 'les banks'} <code>${list}</code> ${n === 1 ? "n'a pas" : "n'ont pas"} de label sentinelle <code>_end_bank_N</code>. WLA-DX gonfle la taille du dernier label de chaque bank jusqu'à la fin du bank (16 KiB), ce qui fait apparaître les banks comme plus pleines qu'elles ne le sont.<br>→ Ajoute un label <code>_end_bank_N:</code> (ex. <code>_end_bank_03:</code>) juste après les dernières données de chaque bank pour un calcul exact. Alternative : utilise des blocs <code>.SECTION</code> explicites.`,
+    tipNoEndMarker: "Pas de label _end_bank_N détecté — occupation possiblement surestimée."
+  },
+  en: {
+    title: "SMS ROM Bank Analyzer",
+    h2File: "Symbol file (.sym WLA-DX or .map SDCC)",
+    noFile: "No file loaded.",
+    hint: `Load a <code>.sym</code> (WLA-DX) or <code>.map</code> (SDCC) file. Format is auto-detected. Each bank is <b>16,384 bytes</b> (16 KiB), RAM is <b>8,192 bytes</b>.<br><b>WLA-DX</b>: the file must be produced with <code>wlalink -A -S</code> (the <code>-S</code> flag writes the <code>[definitions]</code> section with per-symbol sizes).<br>For exact bank usage, add a sentinel label <code>_end_bank_N:</code> at the end of each bank's data (e.g. <code>_end_bank_03:</code>, <code>_end_bank_04:</code>...) — otherwise WLA-DX inflates the last label of each bank to fill to bank end.`,
+    searchPh: "Search symbol…",
+    sortLbl: "Sort:",
+    sortAddr: "Address ↑",
+    sortSize: "Size ↓",
+    sortName: "Name ↑",
+    hideEmpty: "Hide empty banks",
+    hideZero: "Hide zero-size symbols",
+    showTreemap: "Treemap",
+    expandAll: "Expand all",
+    tmFree: "Free space",
+    btnExport: "Export CSV",
+    parsed: (fmt, n) => `Format <b>${fmt}</b> — ${n} symbol(s) parsed.`,
+    errFormat: "Format not recognized.",
+    errNoDefs: `Incomplete .sym file: the <code>[definitions]</code> section is missing. Without it, symbol sizes cannot be computed correctly (the last symbol of each bank would have unknown size and occupation would be under-reported).<br>Regenerate the file with <code>wlalink -A -S</code> — the <code>-S</code> flag adds the sizes.`,
+    statBanks: "Banks used",
+    statSyms: "Symbols",
+    statUsed: "ROM used",
+    statFree: "ROM free",
+    statAvg: "Avg. usage %",
+    statRam: "RAM used",
+    ramTitle: "RAM",
+    bank: (n) => `Bank ${n}`,
+    range: (a, b) => `[${a}–${b}]`,
+    used: (b) => `${b} B used`,
+    free: (b) => `${b} B free`,
+    cnt: (n) => `${n} sym.`,
+    thAddr: "Address",
+    thName: "Symbol",
+    thArea: "Area",
+    thSize: "Size",
+    empty: "No symbols in this bank.",
+    filterEmpty: "No symbols match search.",
+    warnNoEndMarker: (list, n) => `<b>⚠ Occupation may be over-reported</b> — ${n === 1 ? 'bank' : 'banks'} <code>${list}</code> ${n === 1 ? "has no" : "have no"} <code>_end_bank_N</code> sentinel label. WLA-DX inflates the last label's size in each bank to reach bank end (16 KiB), making banks look fuller than they are.<br>→ Add a <code>_end_bank_N:</code> label (e.g. <code>_end_bank_03:</code>) right after the last data of each bank for exact accounting. Alternative: use explicit <code>.SECTION</code> blocks.`,
+    tipNoEndMarker: "No _end_bank_N label detected — usage may be over-reported."
+  }
+};
+// LANG is defined in the shared prelude above.
+const t = () => I18N[LANG];
+
+function applyI18n() {
+  const d = t();
+  // Scope to this tab to avoid touching the other module's DOM
+  document.querySelectorAll('#tab-ba [data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    if (typeof d[k] === 'string') el.innerHTML = d[k];
+  });
+  document.querySelectorAll('#tab-ba [data-i18n-ph]').forEach(el => {
+    const k = el.dataset.i18nPh;
+    if (typeof d[k] === 'string') el.placeholder = d[k];
+  });
+  // rerender if we have data
+  if (state.banks) render();
+}
+
+/* ============================================================
+ * Constants
+ * ============================================================ */
+const BANK_SIZE = 0x4000; // 16384 bytes
+const RAM_BASE = 0xC000;
+const RAM_SIZE = 0x2000;  // 8192 bytes (8 KiB) SMS main RAM
+const state = {
+  format: null, // 'WLA-DX' | 'SDCC'
+  banks: null,  // Map<bankNum, {num, base, symbols:[{addr, name, size, area}], usedBytes}>
+  ram: null,    // {base, size, symbols, usedBytes, freeBytes, pctUsed} | null
+  totalSyms: 0
+};
+
+/* ============================================================
+ * Format detection
+ * ============================================================ */
+function detectFormat(text) {
+  if (/^\s*;\s*this file was created with wlalink/i.test(text) ||
+      /^\s*\[labels\]\s*$/m.test(text)) {
+    return 'WLA-DX';
+  }
+  if (/ASxxxx Linker/i.test(text) ||
+      /^\s*Area\s+Addr\s+Size\s+Decimal Bytes/im.test(text)) {
+    return 'SDCC';
+  }
+  return null;
+}
+
+/* ============================================================
+ * WLA-DX .sym parser
+ * ============================================================
+ * [labels]  → "BB:AAAA name"
+ *   BB = bank in hex, AAAA = addr in slot (usually 8000-BFFF for banked,
+ *   0000-7FFF for fixed slots 0/1)
+ * [definitions] → "SSSSSSSS name"  (some named "_sizeof_XXX")
+ * ============================================================ */
+// Regex matching an "end of bank data" sentinel label. Users add these in
+// their assembly to mark the true end of a bank's data (WLA-DX inflates the
+// `_sizeof_` of the last real label to fill to bank end, which over-reports
+// usage). Accepts: _end_bank, _end_bank_3, _end_bank_03, end_bank_boss, etc.
+const END_BANK_RE = /^_?end_bank(_[a-z0-9_]+)?$/i;
+
+function parseWlaSym(text) {
+  const lines = text.split(/\r?\n/);
+  let section = null;
+  const labels = []; // {bank, addr, name}
+  const sizeByName = new Map(); // sizeof_NAME → size
+  let hasDefinitionsSection = false;
+
+  for (let raw of lines) {
+    const line = raw.replace(/;.*$/, '').trim();
+    if (!line) continue;
+    const secMatch = line.match(/^\[([a-z]+)\]$/i);
+    if (secMatch) {
+      section = secMatch[1].toLowerCase();
+      if (section === 'definitions') hasDefinitionsSection = true;
+      continue;
+    }
+    if (section === 'labels') {
+      // e.g. "03:8000 background_pal"
+      const m = line.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})\s+(\S.*)$/i);
+      if (m) {
+        labels.push({
+          bank: parseInt(m[1], 16),
+          addr: parseInt(m[2], 16),
+          name: m[3].trim()
+        });
+      }
+    } else if (section === 'definitions') {
+      // "00000010 _sizeof_level1_pal"
+      const m = line.match(/^([0-9a-f]{1,8})\s+(\S+)$/i);
+      if (m) {
+        const size = parseInt(m[1], 16);
+        const name = m[2];
+        if (name.startsWith('_sizeof_')) {
+          sizeByName.set(name.slice('_sizeof_'.length), size);
+        }
+      }
+    }
+  }
+
+  // Enforce that the .sym was built with `wlalink -A -S`. Without -S the file
+  // has no [definitions] block, meaning we can't know the size of the LAST
+  // symbol of each bank — bank occupation would be under-reported. Refuse
+  // to guess in that case.
+  if (!hasDefinitionsSection || sizeByName.size === 0) {
+    const err = new Error('WLA_NO_DEFINITIONS');
+    err.code = 'WLA_NO_DEFINITIONS';
+    throw err;
+  }
+
+  // Build per-bank map + separate RAM pseudo-bank for labels in 0xC000-0xDFFF
+  const banks = new Map();
+  const ram = { base: RAM_BASE, size: RAM_SIZE, symbols: [] };
+  for (const l of labels) {
+    // Track whether the size came from [definitions] (source of truth) or is
+    // unknown — labels explicitly declared as 0-size ("end" markers, container
+    // aliases) must stay at 0, not be overridden by delta computation.
+    const knownSize = sizeByName.get(l.name);
+    const hasKnownSize = knownSize !== undefined;
+    const size = hasKnownSize ? knownSize : 0;
+    // RAM labels
+    if (l.addr >= RAM_BASE && l.addr < RAM_BASE + RAM_SIZE) {
+      ram.symbols.push({ addr: l.addr, name: l.name, size, hasKnownSize, area: null });
+      continue;
+    }
+    if (!banks.has(l.bank)) {
+      banks.set(l.bank, { num: l.bank, base: bankBaseAddr(l.bank, l.addr), symbols: [] });
+    }
+    banks.get(l.bank).symbols.push({
+      addr: l.addr, name: l.name, size, hasKnownSize, area: null
+    });
+  }
+
+  finalizeBanks(banks);
+  finalizeRam(ram);
+  return { banks, ram: ram.symbols.length ? ram : null, totalSyms: labels.length };
+}
+
+/**
+ * For WLA-DX: bank 0 and 1 use fixed slots at 0x0000 and 0x4000.
+ *   Any addr < 0x8000 → base is (addr & 0xC000)
+ *   Addr >= 0x8000 → banked slot, base is 0x8000
+ * We keep addresses as-is; used range is computed vs the min address seen
+ * in the bank (fallback: 0x8000).
+ */
+function bankBaseAddr(bank, sampleAddr) {
+  if (bank === 0) return 0x0000;
+  if (bank === 1) return 0x4000;
+  // Banked slot (typically 0x8000)
+  if (sampleAddr >= 0x8000 && sampleAddr < 0xC000) return 0x8000;
+  if (sampleAddr < 0x4000) return 0x0000;
+  if (sampleAddr < 0x8000) return 0x4000;
+  return 0x8000;
+}
+
+/* ============================================================
+ * SDCC .map parser
+ * ============================================================
+ * Blocks:
+ *   Area                                    Addr        Size ...
+ *   AREA_NAME                           HHHHHHHH    HHHHHHHH = ... bytes (ATTRS)
+ *
+ *   [table header]
+ *     ADDR  SYMNAME   [module]
+ *     ADDR  SYMNAME   [module]
+ *
+ * Address mapping to bank/offset (devkitSMS convention):
+ *   addr < 0x8000        → bank = addr / 0x4000, offset = addr % 0x4000
+ *   0x8000 ≤ addr < 0x10000 → RAM/registers, ignored for ROM view
+ *   addr ≥ 0x10000       → bank = addr >> 16, offset = (addr & 0xFFFF) - 0x4000
+ * ============================================================ */
+function parseSdccMap(text) {
+  const lines = text.split(/\r?\n/);
+  const areas = []; // {name, addr, size, attrs, isAbs, syms:[{addr,name,module}]}
+  let curArea = null;
+  let inSymList = false;
+
+  // ASxxxx maps split long areas across pages, re-declaring the same
+  // `_CODE  ADDR  SIZE = N. bytes (ATTRS)` header on each page. Dedup by
+  // (name, addr) so all symbols end up in a single area entry.
+  const areaByKey = new Map();
+  for (const line of lines) {
+    // Area declaration. Two forms exist:
+    //   "_CODE                               00000200    0000709E =       28830. bytes (REL,CON)"
+    //   ".  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)"
+    // The `.  .ABS.` area is where all `__at()` variables (RAM addresses) live,
+    // so we can't afford to miss it. Use a non-greedy name capture to allow
+    // internal whitespace up to the two 8-hex address/size fields.
+    const areaM = line.match(/^(.+?)\s+([0-9A-Fa-f]{8})\s+([0-9A-Fa-f]{8})\s*=\s*\d+\.\s*bytes\s*\(([^)]+)\)/);
+    if (areaM) {
+      const areaName = areaM[1].trim();
+      const key = areaName + '@' + areaM[2];
+      if (areaByKey.has(key)) {
+        curArea = areaByKey.get(key);
+      } else {
+        curArea = {
+          name: areaName,
+          addr: parseInt(areaM[2], 16),
+          size: parseInt(areaM[3], 16),
+          attrs: areaM[4],
+          isAbs: /ABS/i.test(areaM[4]),
+          syms: []
+        };
+        areaByKey.set(key, curArea);
+        areas.push(curArea);
+      }
+      inSymList = false;
+      continue;
+    }
+    if (/^\s+-+\s+-+/.test(line) || /^\s*Value\s+Global/i.test(line)) {
+      inSymList = true;
+      continue;
+    }
+    if (inSymList && curArea) {
+      // "     0000C0DA  _map_shop_tmp                      banked_code_2"
+      const symM = line.match(/^\s+([0-9A-Fa-f]{8})\s+(\S+)\s*(.*)$/);
+      if (symM) {
+        curArea.syms.push({
+          addr: parseInt(symM[1], 16),
+          name: symM[2],
+          module: symM[3].trim() || null
+        });
+      } else if (/^\s*$/.test(line) || /^ASxxxx/.test(line)) {
+        inSymList = false;
+      }
+    }
+  }
+
+  // Dedup symbols within each area (same addr+name repeated across pages)
+  for (const a of areas) {
+    const seen = new Set();
+    a.syms = a.syms.filter(s => {
+      const k = s.addr + '|' + s.name;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+
+  // --- Compute per-symbol size at AREA level (before splitting into banks) ---
+  //     Sort ALL symbols in area by addr (including linker-generated ones
+  //     without a module, like `_abs`, `s__GSINIT`, etc. — these serve as
+  //     boundary markers). Size = next_symbol.addr - cur.addr.
+  //     Last symbol:
+  //       REL area  → size = area.addr + area.size - cur.addr
+  //       ABS area  → the area's `Addr` in the map is nominal (0); the
+  //                    real placement starts at the FIRST symbol's addr
+  //                    and spans `size` bytes. So the last symbol fills
+  //                    up to `first.addr + area.size`. For ABS areas that
+  //                    have size 0 (like `.  .ABS.` catch-all), this
+  //                    degenerates to 0 (unknown), same as before.
+  //     Then FLAG symbols with no module (`hasModule=false`) so they can be
+  //     hidden from display while still contributing to size computation.
+  for (const a of areas) {
+    a.syms.sort((x, y) => x.addr - y.addr);
+    const areaAnchor = (a.isAbs && a.syms.length)
+      ? a.syms[0].addr   // first-symbol addr acts as the "real" area start
+      : a.addr;
+    for (let i = 0; i < a.syms.length; i++) {
+      const cur = a.syms[i];
+      let end;
+      if (i + 1 < a.syms.length) {
+        end = a.syms[i + 1].addr;
+      } else {
+        // Last symbol of the area.
+        end = areaAnchor + a.size;
+      }
+      cur.size = Math.max(0, end - cur.addr);
+      cur.hasModule = !!cur.module;
+    }
+  }
+
+  // --- Linear addr → bank / offset (devkitSMS convention) ---
+  //   addr < 0x8000            → bank 0/1 (fixed slots)
+  //   0x8000 ≤ addr < 0x10000  → RAM/registers, ignored
+  //   addr ≥ 0x10000           → banked: bank = addr >> 16
+  //                              offset  = (addr & 0xFFFF) - 0x4000
+  function bankForAddr(addr) {
+    if (addr < 0x8000) {
+      return { num: addr >> 14, offset: addr & 0x3FFF };
+    }
+    if (addr < 0x10000) return null;
+    const num = addr >> 16;
+    const off = (addr & 0xFFFF) - 0x4000;
+    if (off < 0 || off >= BANK_SIZE) return null;
+    return { num, offset: off };
+  }
+
+  const banks = new Map();
+  const ram = { base: RAM_BASE, size: RAM_SIZE, symbols: [], _ranges: [] };
+  function getBank(num) {
+    if (!banks.has(num)) {
+      const base = num === 0 ? 0x0000 : num === 1 ? 0x4000 : 0x8000;
+      banks.set(num, { num, base, symbols: [], _ranges: [] });
+    }
+    return banks.get(num);
+  }
+
+  // --- Add each REL area's extent to bank ranges (may straddle bank boundaries) ---
+  //     Also detect RAM areas (addr in [0xC000, 0xE000)) and feed them into
+  //     the RAM pseudo-bank ranges.
+  for (const a of areas) {
+    if (a.isAbs || a.size === 0) continue;
+    // RAM area (e.g. _DATA at 0xC000)
+    if (a.addr >= RAM_BASE && a.addr < RAM_BASE + RAM_SIZE) {
+      const off = a.addr - RAM_BASE;
+      const end = Math.min(RAM_SIZE, off + a.size);
+      ram._ranges.push([off, end]);
+      continue;
+    }
+    const startBi = bankForAddr(a.addr);
+    if (!startBi) continue;
+    const endBi = bankForAddr(a.addr + a.size - 1);
+    if (!endBi) continue;
+    if (startBi.num === endBi.num) {
+      getBank(startBi.num)._ranges.push([startBi.offset, endBi.offset + 1]);
+    } else {
+      for (let bn = startBi.num; bn <= endBi.num; bn++) {
+        if (bn === startBi.num) getBank(bn)._ranges.push([startBi.offset, BANK_SIZE]);
+        else if (bn === endBi.num) getBank(bn)._ranges.push([0, endBi.offset + 1]);
+        else getBank(bn)._ranges.push([0, BANK_SIZE]);
+      }
+    }
+  }
+
+  // --- Distribute symbols to their banks or to the RAM pseudo-bank ---
+  //     Only symbols WITH a module (real user-code from a .rel file, e.g.
+  //     module="rom", "banked_code_2", "crt0") get displayed. Linker-internal
+  //     symbols (no module) already served their purpose as size boundaries.
+  let total = 0;
+  for (const a of areas) {
+    for (const s of a.syms) {
+      if (!s.hasModule) continue;
+      // RAM symbol (0xC000-0xDFFF), regardless of the containing area
+      if (s.addr >= RAM_BASE && s.addr < RAM_BASE + RAM_SIZE) {
+        const off = s.addr - RAM_BASE;
+        // Clip size at RAM end (a very large size means the "next symbol" was
+        // outside RAM in linear-addr space, e.g. `s__BANK2 = 0x24000`)
+        const size = Math.min(s.size, RAM_SIZE - off);
+        ram.symbols.push({
+          addr: s.addr, name: s.name, size, area: a.name, module: s.module
+        });
+        total++;
+        continue;
+      }
+      const bi = bankForAddr(s.addr);
+      if (!bi) continue;
+      const bank = getBank(bi.num);
+      // Clip size at bank end (defensive; a symbol shouldn't straddle banks)
+      const maxSize = BANK_SIZE - bi.offset;
+      const size = Math.min(s.size, maxSize);
+      bank.symbols.push({
+        addr: bank.base + bi.offset,
+        name: s.name,
+        size,
+        area: a.name,
+        module: s.module
+      });
+      total++;
+    }
+  }
+
+  // Also, feed ABS-area symbol positions into their bank/ram ranges.
+  for (const b of banks.values()) {
+    for (const s of b.symbols) {
+      const off = s.addr - b.base;
+      if (s.size > 0) b._ranges.push([off, off + s.size]);
+    }
+  }
+  for (const s of ram.symbols) {
+    const off = s.addr - RAM_BASE;
+    if (s.size > 0) ram._ranges.push([off, off + s.size]);
+  }
+
+  // --- Finalize banks: union of ranges → usedBytes, sort symbols ---
+  for (const b of banks.values()) {
+    b.symbols.sort((x, y) => x.addr - y.addr || x.name.localeCompare(y.name));
+    b.usedBytes = Math.min(BANK_SIZE, unionLen(b._ranges));
+    b.freeBytes = BANK_SIZE - b.usedBytes;
+    b.pctUsed = b.usedBytes / BANK_SIZE * 100;
+    for (const s of b.symbols) s.end = s.addr + s.size;
+    delete b._ranges;
+  }
+
+  // Finalize RAM the same way
+  ram.symbols.sort((x, y) => x.addr - y.addr || x.name.localeCompare(y.name));
+  ram.usedBytes = Math.min(RAM_SIZE, unionLen(ram._ranges));
+  ram.freeBytes = RAM_SIZE - ram.usedBytes;
+  ram.pctUsed = ram.usedBytes / RAM_SIZE * 100;
+  for (const s of ram.symbols) s.end = s.addr + s.size;
+  delete ram._ranges;
+
+  return {
+    banks,
+    ram: (ram.symbols.length || ram.usedBytes) ? ram : null,
+    totalSyms: total
+  };
+}
+
+// Union length of [start,end) integer ranges
+function unionLen(ranges) {
+  if (!ranges.length) return 0;
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  let total = 0, s = sorted[0][0], e = sorted[0][1];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i][0] <= e) e = Math.max(e, sorted[i][1]);
+    else { total += e - s; s = sorted[i][0]; e = sorted[i][1]; }
+  }
+  return total + (e - s);
+}
+
+/* ============================================================
+ * Common finalization
+ * ============================================================ */
+// Used only for WLA-DX. SDCC does its own finalization in parseSdccMap.
+function finalizeBanks(banks) {
+  for (const [, b] of banks) {
+    b.symbols.sort((x, y) => x.addr - y.addr || x.name.localeCompare(y.name));
+
+    const bankEndAddr = b.base + BANK_SIZE;
+
+    // Detect an `_end_bank_*` sentinel label in this bank. If present, it
+    // marks the true end of data — use it to (a) fix the inflated size of
+    // the previous label (whose `_sizeof_` was set by WLA-DX to reach bank
+    // end), (b) hide the marker itself, (c) compute exact bank usage.
+    // Multiple markers → take the earliest (smallest addr).
+    let endMarker = null;
+    for (const s of b.symbols) {
+      if (END_BANK_RE.test(s.name) && (!endMarker || s.addr < endMarker.addr)) {
+        endMarker = s;
+      }
+    }
+
+    if (endMarker) {
+      // Recompute the previous real label's size using the marker position.
+      let prev = null;
+      for (const s of b.symbols) {
+        if (s === endMarker) continue;
+        if (s.addr >= endMarker.addr) continue;
+        if (!prev || s.addr > prev.addr) prev = s;
+      }
+      if (prev) {
+        prev.size = endMarker.addr - prev.addr;
+        prev.sizeCorrected = true; // flag for display
+      }
+      // The sentinel itself has no data.
+      endMarker.size = 0;
+      endMarker.isEndMarker = true;
+    }
+
+    // For labels with no known size (no _sizeof_ entry at all), compute a
+    // delta-based estimate. Labels explicitly declared size 0 stay 0.
+    for (let i = 0; i < b.symbols.length; i++) {
+      const cur = b.symbols[i];
+      if (!cur.hasKnownSize && cur !== endMarker) {
+        let j = i + 1;
+        while (j < b.symbols.length && b.symbols[j].addr === cur.addr) j++;
+        if (j < b.symbols.length) {
+          cur.size = Math.min(b.symbols[j].addr, bankEndAddr) - cur.addr;
+        }
+      }
+      // Defensive cap
+      if (cur.addr + cur.size > bankEndAddr) {
+        cur.size = Math.max(0, bankEndAddr - cur.addr);
+      }
+    }
+
+    // If we have an end marker, bank usage is exact: everything from base
+    // to marker addr is used. Otherwise fall back to union of ranges (may
+    // over-report because of the inflated last-label size).
+    if (endMarker) {
+      b.usedBytes = Math.min(BANK_SIZE, endMarker.addr - b.base);
+      b.hasEndMarker = true;
+    } else {
+      const ranges = b.symbols
+        .filter(s => s.size > 0)
+        .map(s => [s.addr - b.base, s.addr - b.base + s.size]);
+      let used = unionLen(ranges);
+      if (used === 0 && b.symbols.length > 0) {
+        const last = b.symbols[b.symbols.length - 1];
+        used = (last.addr - b.base) + 1;
+      }
+      b.usedBytes = Math.min(BANK_SIZE, used);
+      b.hasEndMarker = false;
+    }
+    b.freeBytes = BANK_SIZE - b.usedBytes;
+    b.pctUsed = b.usedBytes / BANK_SIZE * 100;
+
+    for (const s of b.symbols) s.end = s.addr + s.size;
+  }
+}
+
+// Finalize the RAM pseudo-bank. Symbols use absolute addresses in
+// [RAM_BASE, RAM_BASE + RAM_SIZE). Sizes may be pre-computed (SDCC path) or
+// come from WLA-DX definitions; missing sizes are inferred by delta.
+function finalizeRam(ram) {
+  ram.symbols.sort((x, y) => x.addr - y.addr || x.name.localeCompare(y.name));
+  const ramEnd = RAM_BASE + RAM_SIZE;
+
+  for (let i = 0; i < ram.symbols.length; i++) {
+    const cur = ram.symbols[i];
+    if (cur.hasKnownSize === false) {
+      let j = i + 1;
+      while (j < ram.symbols.length && ram.symbols[j].addr === cur.addr) j++;
+      if (j < ram.symbols.length) {
+        cur.size = Math.min(ram.symbols[j].addr, ramEnd) - cur.addr;
+      }
+    }
+    if (cur.addr + cur.size > ramEnd) {
+      cur.size = Math.max(0, ramEnd - cur.addr);
+    }
+  }
+
+  const ranges = ram.symbols
+    .filter(s => s.size > 0)
+    .map(s => [s.addr - RAM_BASE, s.addr - RAM_BASE + s.size]);
+  let used = unionLen(ranges);
+  if (used === 0 && ram.symbols.length > 0) {
+    const last = ram.symbols[ram.symbols.length - 1];
+    used = (last.addr - RAM_BASE) + 1;
+  }
+
+  ram.usedBytes = Math.min(RAM_SIZE, used);
+  ram.freeBytes = RAM_SIZE - ram.usedBytes;
+  ram.pctUsed = ram.usedBytes / RAM_SIZE * 100;
+  for (const s of ram.symbols) s.end = s.addr + s.size;
+}
+
+/* ============================================================
+ * UI / rendering
+ * ============================================================ */
+const $ = (id) => document.getElementById(id);
+
+function classifySymbol(name, area) {
+  // Rough classification for coloring.
+  if (area && /HEADER|TRAMPOLINE|CABS|GSINIT|GSFINAL/.test(area)) return 'header';
+  if (/^_sizeof_|_pal$|_map$|_tiles|_img|_stream|_sfx|_lut$|_dat$|_bin$|^screen_|^music_|^sample_/.test(name)) return 'data';
+  if (/^_/.test(name) || /^b_/.test(name)) return 'code';
+  return '';
+}
+
+function fmtBytes(n) {
+  return n.toLocaleString(LANG === 'fr' ? 'fr-FR' : 'en-US');
+}
+function hex(n, w=4) {
+  return '$' + n.toString(16).toUpperCase().padStart(w, '0');
+}
+function bankHex(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+
+function barClass(pct) {
+  if (pct < 60) return 'low';
+  if (pct < 85) return 'mid';
+  return 'high';
+}
+
+function render() {
+  const d = t();
+  const banksEl = $('banks');
+  const sumEl = $('summary');
+  if (!state.banks) { banksEl.innerHTML=''; sumEl.style.display='none'; return; }
+
+  // ------- Summary -------
+  const bankList = [...state.banks.values()].sort((a,b) => a.num - b.num);
+  const hideEmpty = $('chkHideEmpty')?.checked || false;
+  const visibleBanks = hideEmpty ? bankList.filter(b => b.usedBytes > 0) : bankList;
+
+  const totalUsed = bankList.reduce((s,b) => s + b.usedBytes, 0);
+  const totalCapacity = bankList.length * BANK_SIZE;
+  const totalFree = totalCapacity - totalUsed;
+  const avgPct = bankList.length ? (bankList.reduce((s,b) => s + b.pctUsed, 0) / bankList.length) : 0;
+
+  const ramSection = state.ram ? `
+    <div class="stat">
+      <span class="k">${d.statRam}</span>
+      <span class="v" style="color:var(--${barClass(state.ram.pctUsed) === 'low' ? 'good' : barClass(state.ram.pctUsed) === 'mid' ? 'warn' : 'bad'})">${state.ram.pctUsed.toFixed(1)}%</span>
+      <span class="sub">${fmtBytes(state.ram.usedBytes)} / ${fmtBytes(RAM_SIZE)} B</span>
+    </div>
+  ` : '';
+
+  sumEl.style.display = 'grid';
+  sumEl.innerHTML = `
+    <div class="stat">
+      <span class="k">${d.statBanks}</span>
+      <span class="v">${bankList.length}</span>
+      <span class="sub">${d.range(hex(bankList[0]?.num || 0, 2), hex(bankList[bankList.length-1]?.num || 0, 2))}</span>
+    </div>
+    <div class="stat">
+      <span class="k">${d.statSyms}</span>
+      <span class="v">${fmtBytes(state.totalSyms)}</span>
+      <span class="sub">${state.format}</span>
+    </div>
+    <div class="stat">
+      <span class="k">${d.statUsed}</span>
+      <span class="v">${fmtBytes(totalUsed)} B</span>
+      <span class="sub">${(totalUsed/1024).toFixed(1)} KiB</span>
+    </div>
+    <div class="stat">
+      <span class="k">${d.statFree}</span>
+      <span class="v" style="color:var(--good)">${fmtBytes(totalFree)} B</span>
+      <span class="sub">${(totalFree/1024).toFixed(1)} KiB</span>
+    </div>
+    <div class="stat">
+      <span class="k">${d.statAvg}</span>
+      <span class="v" style="color:var(--${barClass(avgPct) === 'low' ? 'good' : barClass(avgPct) === 'mid' ? 'warn' : 'bad'})">${avgPct.toFixed(1)}%</span>
+      <span class="sub">${fmtBytes(BANK_SIZE)} B/bank</span>
+    </div>
+    ${ramSection}
+  `;
+
+  // ------- Cards (RAM first, then banks) -------
+  const sortBy = $('sortBy')?.value || 'addr';
+  const search = ($('search')?.value || '').trim().toLowerCase();
+  const expandAll = $('chkExpandAll')?.checked || false;
+  const hideZero = $('chkHideZero')?.checked || false;
+
+  banksEl.innerHTML = '';
+
+  // --- Warning banner for WLA-DX banks without an `_end_bank_*` marker ---
+  const warnBannerEl = $('warnBanner');
+  const banksMissingMarker = state.format === 'WLA-DX'
+    ? bankList.filter(b => !b.hasEndMarker)
+    : [];
+  if (banksMissingMarker.length > 0) {
+    const list = banksMissingMarker
+      .map(b => hex(b.num, 2))
+      .join(', ');
+    warnBannerEl.innerHTML = d.warnNoEndMarker(list, banksMissingMarker.length);
+    warnBannerEl.style.display = 'block';
+  } else {
+    warnBannerEl.style.display = 'none';
+  }
+
+  if (state.ram) {
+    banksEl.appendChild(makeCard(state.ram, 'ram', d, sortBy, search, hideZero, expandAll));
+  }
+  for (const b of visibleBanks) {
+    banksEl.appendChild(makeCard(b, 'bank', d, sortBy, search, hideZero, expandAll));
+  }
+}
+
+/**
+ * Build one card (bank or RAM). `kind` = 'bank' | 'ram' toggles the title,
+ * range labels, size constant, and header class.
+ */
+function makeCard(item, kind, d, sortBy, search, hideZero, expandAll) {
+  const isRam = kind === 'ram';
+  const capacity = isRam ? RAM_SIZE : BANK_SIZE;
+
+  const div = document.createElement('div');
+  div.className = 'bank' + (isRam ? ' is-ram' : '') + (expandAll || item._open ? ' open' : '');
+  if (expandAll) item._open = true;
+
+  // sort symbols
+  let syms = [...item.symbols];
+  if (sortBy === 'size') syms.sort((x,y) => y.size - x.size || x.addr - y.addr);
+  else if (sortBy === 'name') syms.sort((x,y) => x.name.localeCompare(y.name));
+  else syms.sort((x,y) => x.addr - y.addr);
+
+  if (hideZero) syms = syms.filter(s => s.size > 0);
+  if (search) {
+    syms = syms.filter(s => s.name.toLowerCase().includes(search) ||
+                            (s.area && s.area.toLowerCase().includes(search)));
+  }
+
+  const barCls = barClass(item.pctUsed);
+  const symCount = item.symbols.length;
+
+  const titleHtml = isRam
+    ? `<span class="title" style="color:var(--accent2)">${d.ramTitle}</span>`
+    : `<span class="title">${d.bank(item.num)} <span style="color:var(--muted); font-weight:400; font-size:11px">(${hex(item.num, 2)})</span>${state.format === 'WLA-DX' && !item.hasEndMarker ? `<span class="warn-badge" title="${d.tipNoEndMarker}">!</span>` : ''}</span>`;
+
+  div.innerHTML = `
+    <div class="bank-head">
+      <span class="caret"></span>
+      ${titleHtml}
+      <span class="range">${hex(item.base)}–${hex(item.base + capacity - 1)}</span>
+      <div class="bar-wrap">
+        <div class="bar-fill ${barCls}" style="width:${item.pctUsed.toFixed(2)}%"></div>
+        <div class="bar-txt" style="color:${item.pctUsed > 8 ? '#000' : 'var(--fg)'}">${item.pctUsed.toFixed(1)}%</div>
+      </div>
+      <div class="stats">
+        <span class="used">${fmtBytes(item.usedBytes)} B</span>
+        <span class="free">+${fmtBytes(item.freeBytes)} B</span>
+        <span class="cnt">${d.cnt(symCount)}</span>
+      </div>
+    </div>
+    <div class="bank-body"></div>
+  `;
+
+  const body = div.querySelector('.bank-body');
+  const showTreemap = ($('chkTreemap')?.checked ?? true) && item.symbols.length > 0;
+  if (showTreemap) {
+    body.insertAdjacentHTML('beforeend', buildTreemap(item, kind, d));
+  }
+  if (syms.length === 0) {
+    body.innerHTML = `<div class="empty-bank">${search ? d.filterEmpty : d.empty}</div>`;
+  } else {
+    const table = document.createElement('table');
+    table.className = 'syms';
+    const showArea = state.format === 'SDCC';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th style="width:80px">${d.thAddr}</th>
+          <th>${d.thName}</th>
+          ${showArea ? `<th style="width:120px">${d.thArea}</th>` : ''}
+          <th style="width:100px; text-align:right">${d.thSize}</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector('tbody');
+    for (const s of syms) {
+      const cls = classifySymbol(s.name, s.area);
+      const pct = capacity ? (s.size / capacity * 100) : 0;
+      const tr = document.createElement('tr');
+      if (s.isEndMarker) tr.className = 'end-marker';
+      tr.style.setProperty('--pct', pct.toFixed(3) + '%');
+      tr.innerHTML = `
+        <td class="addr">${hex(s.addr)}</td>
+        <td class="name ${cls}">${escapeHtml(s.name)}</td>
+        ${showArea ? `<td class="area">${escapeHtml(s.area || '')}</td>` : ''}
+        <td class="size">${s.size ? fmtBytes(s.size) : '—'}<span class="b">${s.size ? hex(s.size) : ''}</span></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    body.appendChild(table);
+  }
+
+  div.querySelector('.bank-head').addEventListener('click', () => {
+    item._open = !div.classList.contains('open');
+    div.classList.toggle('open', item._open);
+  });
+
+  return div;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+/* ============================================================
+ * Treemap (squarified — Bruls, Huijbregts & van Wijk)
+ *
+ * Given a list of items sorted by descending value, tile a WxH rectangle
+ * with sub-rectangles whose areas are proportional to the values, keeping
+ * aspect ratios as close to 1 as possible.
+ * ============================================================ */
+function squarifyTreemap(items, w, h) {
+  const rects = [];
+  const sorted = [...items].filter(it => it.value > 0)
+                            .sort((a, b) => b.value - a.value);
+  _squarify(sorted, 0, 0, w, h, rects);
+  return rects;
+}
+
+function _squarify(items, x, y, w, h, out) {
+  if (items.length === 0 || w <= 0 || h <= 0) return;
+  const total = items.reduce((s, it) => s + it.value, 0);
+  if (total <= 0) return;
+  if (items.length === 1) {
+    out.push({ x, y, w, h, item: items[0] });
+    return;
+  }
+  const shorter = Math.min(w, h);
+  const area = w * h;
+
+  // Grow the current row while it improves worst aspect ratio.
+  let rowSize = 1;
+  let bestRatio = _worstRatio(items.slice(0, 1), shorter, total, area);
+  for (let s = 2; s <= items.length; s++) {
+    const r = _worstRatio(items.slice(0, s), shorter, total, area);
+    if (r > bestRatio) break;
+    rowSize = s;
+    bestRatio = r;
+  }
+
+  const row = items.slice(0, rowSize);
+  const rest = items.slice(rowSize);
+  const rowValue = row.reduce((s, it) => s + it.value, 0);
+  const rowArea = (rowValue / total) * area;
+  const rowThickness = rowArea / shorter;
+
+  let off = 0;
+  if (w <= h) {
+    // Row is horizontal along the top
+    for (const it of row) {
+      const iw = (it.value / rowValue) * w;
+      out.push({ x: x + off, y, w: iw, h: rowThickness, item: it });
+      off += iw;
+    }
+    _squarify(rest, x, y + rowThickness, w, h - rowThickness, out);
+  } else {
+    // Row is vertical along the left
+    for (const it of row) {
+      const ih = (it.value / rowValue) * h;
+      out.push({ x, y: y + off, w: rowThickness, h: ih, item: it });
+      off += ih;
+    }
+    _squarify(rest, x + rowThickness, y, w - rowThickness, h, out);
+  }
+}
+
+function _worstRatio(row, shorter, totalValue, totalArea) {
+  const rowValue = row.reduce((s, it) => s + it.value, 0);
+  const rowArea = (rowValue / totalValue) * totalArea;
+  const thickness = rowArea / shorter;
+  let worst = 1;
+  for (const it of row) {
+    const itArea = (it.value / totalValue) * totalArea;
+    const itLength = itArea / thickness;
+    const ratio = Math.max(thickness / itLength, itLength / thickness);
+    if (ratio > worst) worst = ratio;
+  }
+  return worst;
+}
+
+/**
+ * Deterministic HSL color from a string. Muted, avoids pure red/green.
+ */
+function nameColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  }
+  const hue = ((h % 360) + 360) % 360;
+  return `hsl(${hue}, 55%, 62%)`;
+}
+
+/**
+ * Build the treemap SVG for a bank/RAM card.
+ * Free space is added as a distinct tile at the end.
+ */
+function buildTreemap(item, kind, d) {
+  const capacity = kind === 'ram' ? RAM_SIZE : BANK_SIZE;
+  const symbols = item.symbols.filter(s => s.size > 0 && !s.isEndMarker);
+  const freeBytes = capacity - item.usedBytes;
+
+  const tiles = symbols.map(s => ({
+    value: s.size, kind: 'sym',
+    name: s.name, addr: s.addr, size: s.size, area: s.area
+  }));
+  if (freeBytes > 0) {
+    tiles.push({ value: freeBytes, kind: 'free', name: d.tmFree, size: freeBytes });
+  }
+  if (tiles.length === 0) return '';
+
+  const W = 1000, H = 220;
+  const rects = squarifyTreemap(tiles, W, H);
+
+  const parts = [
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="treemap-svg">`
+  ];
+  for (const r of rects) {
+    const t = r.item;
+    const isFree = t.kind === 'free';
+    const fill = isFree ? '#2a2a35' : nameColor(t.name);
+    const cls = isFree ? 'tm-tile tm-free' : 'tm-tile';
+    const dataAttrs = isFree
+      ? `data-kind="free" data-size="${t.size}" data-cap="${capacity}"`
+      : `data-kind="sym" data-name="${escapeHtml(t.name)}" data-addr="${t.addr}" data-size="${t.size}" data-cap="${capacity}"${t.area?` data-area="${escapeHtml(t.area)}"`:''}`;
+
+    // Label if the tile is large enough
+    let label = '';
+    if (r.w > 60 && r.h > 22) {
+      const fontSize = Math.min(12, Math.max(9, Math.floor(r.h / 5)));
+      const maxChars = Math.floor((r.w - 8) / (fontSize * 0.62));
+      const displayName = t.name.length > maxChars
+        ? t.name.slice(0, Math.max(3, maxChars - 1)) + '…'
+        : t.name;
+      label = `<text x="${(r.x + 5).toFixed(1)}" y="${(r.y + fontSize + 3).toFixed(1)}" font-size="${fontSize}">${escapeHtml(displayName)}</text>`;
+      if (r.h > 44 && r.w > 80) {
+        label += `<text x="${(r.x + 5).toFixed(1)}" y="${(r.y + fontSize * 2 + 6).toFixed(1)}" font-size="${Math.max(9, fontSize - 1)}" opacity="0.7">${fmtBytes(t.size)} B</text>`;
+      }
+    }
+    parts.push(
+      `<g class="${cls}" ${dataAttrs}>` +
+        `<rect x="${r.x.toFixed(2)}" y="${r.y.toFixed(2)}" width="${r.w.toFixed(2)}" height="${r.h.toFixed(2)}" fill="${fill}" stroke="#1a1a1e" stroke-width="1"/>` +
+        label +
+      `</g>`
+    );
+  }
+  parts.push('</svg>');
+  return `<div class="treemap-wrap">${parts.join('')}</div>`;
+}
+
+/* ============================================================
+ * CSV export
+ * ============================================================ */
+function exportCSV() {
+  if (!state.banks) return;
+  const rows = [['bank','bank_hex','base','addr','name','size_dec','size_hex','area']];
+  const bankList = [...state.banks.values()].sort((a,b) => a.num - b.num);
+  for (const b of bankList) {
+    for (const s of b.symbols) {
+      rows.push([
+        b.num, hex(b.num, 2), hex(b.base),
+        hex(s.addr), s.name, s.size, hex(s.size), s.area || ''
+      ]);
+    }
+  }
+  if (state.ram) {
+    for (const s of state.ram.symbols) {
+      rows.push([
+        'RAM', '--', hex(RAM_BASE),
+        hex(s.addr), s.name, s.size, hex(s.size), s.area || ''
+      ]);
+    }
+  }
+  const csv = rows.map(r => r.map(v => {
+    const str = String(v);
+    return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'rom_banks.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+/* ============================================================
+ * Wiring
+ * ============================================================ */
+async function loadFile(file) {
+  const s = $('sFile');
+  try {
+    const text = await file.text();
+    const fmt = detectFormat(text);
+    if (!fmt) {
+      s.textContent = t().errFormat;
+      s.className = 'status err';
+      return;
+    }
+    let result;
+    if (fmt === 'WLA-DX') result = parseWlaSym(text);
+    else result = parseSdccMap(text);
+    state.format = fmt;
+    state.banks = result.banks;
+    state.ram = result.ram || null;
+    state.totalSyms = result.totalSyms;
+    s.innerHTML = `<b>${file.name}</b> — ` + t().parsed(fmt, result.totalSyms);
+    s.className = 'status ok';
+    $('controls').style.display = 'flex';
+    render();
+  } catch (e) {
+    console.error(e);
+    if (e.code === 'WLA_NO_DEFINITIONS') {
+      s.innerHTML = t().errNoDefs;
+    } else {
+      s.textContent = 'Error: ' + e.message;
+    }
+    s.className = 'status err';
+    // Also clear any previous parse state so the stale UI doesn't linger
+    state.banks = null;
+    state.ram = null;
+    $('controls').style.display = 'none';
+    $('summary').style.display = 'none';
+    $('banks').innerHTML = '';
+  }
+}
+
+$('fileInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (f) loadFile(f);
+});
+// btnLang is wired globally in the shared prelude
+$('sortBy').addEventListener('change', render);
+$('search').addEventListener('input', render);
+$('chkHideEmpty').addEventListener('change', render);
+$('chkHideZero').addEventListener('change', render);
+$('chkTreemap').addEventListener('change', render);
+$('chkExpandAll').addEventListener('change', render);
+
+/* ---- Treemap tooltip (delegated) ---- */
+const tmTip = document.getElementById('tmTooltip');
+document.addEventListener('mouseover', (e) => {
+  const tile = e.target.closest('.tm-tile');
+  if (!tile) return;
+  const kind = tile.dataset.kind;
+  const cap = +tile.dataset.cap || 1;
+  const size = +tile.dataset.size || 0;
+  const pct = (size / cap * 100).toFixed(2);
+  if (kind === 'free') {
+    tmTip.innerHTML = `
+      <div class="tt-name">${t().tmFree}</div>
+      <div class="tt-size">${fmtBytes(size)} B ($${size.toString(16).toUpperCase()})</div>
+      <div class="tt-pct">${pct}% du bank</div>`;
+  } else {
+    const addr = +tile.dataset.addr;
+    const area = tile.dataset.area;
+    tmTip.innerHTML = `
+      <div class="tt-name">${escapeHtml(tile.dataset.name)}</div>
+      <div class="tt-addr">${hex(addr)} → ${hex(addr + size)}</div>
+      <div class="tt-size">${fmtBytes(size)} B ($${size.toString(16).toUpperCase()})</div>
+      <div class="tt-pct">${pct}% du bank</div>
+      ${area ? `<div class="tt-area">${escapeHtml(area)}</div>` : ''}`;
+  }
+  tmTip.style.display = 'block';
+});
+document.addEventListener('mousemove', (e) => {
+  if (tmTip.style.display !== 'block') return;
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const rect = tmTip.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - pad;
+  tmTip.style.left = x + 'px';
+  tmTip.style.top = y + 'px';
+});
+document.addEventListener('mouseout', (e) => {
+  if (e.target.closest('.tm-tile')) tmTip.style.display = 'none';
+});
+$('btnExport').addEventListener('click', exportCSV);
+
+// Drag & drop on the whole page
+['dragover','dragenter'].forEach(evt =>
+  window.addEventListener(evt, e => { e.preventDefault(); })
+);
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+langCallbacks.push(applyI18n);
+applyI18n();
+
+})(); /* end BANK ANALYZER module */
+
+
+/* ============================================================
+ * RAM DIFF module
+ * ============================================================ */
+(() => {
+
+/* ========================================================================
+ *  I18N — English / French. Detects navigator, defaults to English,
+ *  persists to localStorage.
+ * ====================================================================== */
+const I18N = {
+  en: {
+    title: 'SMS/GG RAM DIFF (Grid) - (C000–DFFF)',
+    h2Bin: '1. Binary files (8 KiB RAM dump)',
+    lblBin1: 'BIN #1 (reference)',
+    lblBin2: 'BIN #2 (compared)',
+    h2Ctx:  '2. SDCC context files (optional)',
+    lblMap: 'rom.map (SDCC linker map)',
+    lblHdr: '_structures.h (typedefs + extern __at)',
+    hintCtx: 'Load <code>rom.map</code> and <code>_structures.h</code> to enrich the tooltip with the symbol name and decoded field (e.g. <code>sHero.x.lo</code>).',
+    btnDiff: 'Build grid',
+    btnClear: 'Clear',
+    btnPick: 'Choose file\u2026',
+    chkOnlyDiff: 'Hide rows with no difference',
+    chkColorSym: 'Color by symbol',
+    legendSame: 'identical',
+    legendDiff: 'different (v1 / v2)',
+    thAddr: 'Addr',
+    thAscii: 'ASCII',
+    unit: 'B',
+    sumBytes: '<b>{n}</b> bytes differ / {tot}',
+    sumPct: '<b>{p}%</b>',
+    sumSymTouched: '<b>{n}</b> symbols touched',
+    sumSymLoaded: '<b>{n}</b> symbols loaded',
+    sumStructs: '<b>{n}</b> structs parsed',
+    statusFileOk:  '\u2713 {name} \u2014 {n} B',
+    statusFileBad: '\u26A0 Size = {n} B (expected {exp}). Continuing anyway.',
+    statusMapOk:   '\u2713 {name} \u2014 {n} RAM symbols',
+    statusHdrOk:   '\u2713 {name} \u2014 {a} structs, {b} externs',
+    tipVal:  'Value:',
+    tipVal1: 'BIN #1:',
+    tipVal2: 'BIN #2:',
+    tipNoSym: '(no symbol at this address)',
+    tipShared: '{n} symbols share this address',
+    tipBase:  'base 0x{addr} \u00B7 size {n} B \u00B7 +0x{off}',
+    tipNoStruct: '(no struct)',
+    tipWord: 'word:',
+    langBtn: 'FR',
+  },
+  fr: {
+    title: 'SMS/GG RAM DIFF (Grid) - (C000–DFFF)',
+    h2Bin: '1. Fichiers binaires (dump RAM 8 Kio)',
+    lblBin1: 'BIN #1 (référence)',
+    lblBin2: 'BIN #2 (à comparer)',
+    h2Ctx:  '2. Fichiers de contexte SDCC (optionnels)',
+    lblMap: 'rom.map (SDCC linker map)',
+    lblHdr: '_structures.h (typedefs + extern __at)',
+    hintCtx: 'Charge <code>rom.map</code> et <code>_structures.h</code> pour enrichir le tooltip avec le nom du symbole et le champ décodé (ex : <code>sHero.x.lo</code>).',
+    btnDiff: 'Générer la grille',
+    btnClear: 'Effacer',
+    btnPick: 'Choisir un fichier\u2026',
+    chkOnlyDiff: 'Masquer lignes sans différence',
+    chkColorSym: 'Colorer par symbole',
+    legendSame: 'identique',
+    legendDiff: 'différent (v1 / v2)',
+    thAddr: 'Addr',
+    thAscii: 'ASCII',
+    unit: 'o',
+    sumBytes: '<b>{n}</b> octets différents / {tot}',
+    sumPct: '<b>{p}%</b>',
+    sumSymTouched: '<b>{n}</b> symboles touchés',
+    sumSymLoaded: '<b>{n}</b> symboles chargés',
+    sumStructs: '<b>{n}</b> structs parsés',
+    statusFileOk:  '\u2713 {name} \u2014 {n} o',
+    statusFileBad: '\u26A0 Taille = {n} o (attendu {exp}). On continue quand même.',
+    statusMapOk:   '\u2713 {name} \u2014 {n} symboles RAM',
+    statusHdrOk:   '\u2713 {name} \u2014 {a} structs, {b} externs',
+    tipVal:  'Valeur :',
+    tipVal1: 'BIN #1 :',
+    tipVal2: 'BIN #2 :',
+    tipNoSym: '(aucun symbole à cette adresse)',
+    tipShared: '{n} symboles partagent cette adresse',
+    tipBase:  'base 0x{addr} \u00B7 size {n} o \u00B7 +0x{off}',
+    tipNoStruct: '(pas de struct)',
+    tipWord: 'word :',
+    langBtn: 'EN',
+  },
+};
+
+// LANG is provided by outer shared LANG (uppercase)
+
+function t(key, vars) {
+  let s = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
+  if (vars) for (const k in vars) s = s.split('{'+k+'}').join(vars[k]);
+  return s;
+}
+
+function detectLang() {
+  const nav = (navigator.language || 'en').toLowerCase();
+  return nav.startsWith('fr') ? 'fr' : 'en';
+}
+
+function initLang() { /* no-op, shared */ }
+
+function setLang(l) { LANG = l; applyLang(); }
+
+function applyLang() {
+  // Scope translation to this tab so we don't touch the other module's DOM
+  document.querySelectorAll('#tab-rd [data-i18n]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18n);
+  });
+  ['bin1','bin2','map','hdr'].forEach(renderStatus);
+  if (statsCache) renderSummary(statsCache);
+}
+
+/* ========================================================================
+ *  ETAT GLOBAL
+ * ====================================================================== */
+const RAM_BASE = 0xC000;
+const RAM_SIZE = 0x2000;   // 8 Kio
+const COLS     = 16;
+const ROWS     = RAM_SIZE / COLS; // 512
+
+const state = {
+  bin1: null, bin2: null,
+  map:  null, hdr:  null,
+  symbols: [], typedefs: {},
+};
+
+/* ========================================================================
+ *  PARSE ROM.MAP  ->  liste des symboles en RAM [C000..DFFF]
+ *  (repris tel quel de ramdiff.html)
+ * ====================================================================== */
+function parseMap(text) {
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  const re = /^\s*([0-9A-Fa-f]{8})\s+(\S+)\s+(\S+)?/;
+  for (const line of lines) {
+    const m = line.match(re);
+    if (!m) continue;
+    const addr = parseInt(m[1], 16);
+    if (addr < RAM_BASE || addr >= RAM_BASE + RAM_SIZE) continue;
+    let name = m[2];
+    if (name.startsWith('_')) name = name.slice(1);
+    out.push({ addr, name, source:'map' });
+  }
+  const seen = new Set();
+  return out.filter(s => {
+    const k = s.addr+'|'+s.name;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+/* ========================================================================
+ *  PARSE _structures.h  (repris tel quel)
+ * ====================================================================== */
+function parseHeader(text) {
+  const clean = text
+    .replace(/\/\*[\s\S]*?\*\//g,'')
+    .replace(/\/\/.*$/gm,'');
+
+  const typedefs = {};
+  const reStruct = /typedef\s+struct\s*\{([\s\S]*?)\}\s*([A-Za-z_]\w*)\s*;/g;
+  let m;
+  while ((m = reStruct.exec(clean)) !== null) {
+    const body = m[1];
+    const name = m[2];
+    const fields = [];
+    let offset = 0;
+    const stmts = body.split(';').map(s => s.trim()).filter(Boolean);
+    for (const stmt of stmts) {
+      const parts = stmt.replace(/\bunsigned\b|\bsigned\b|\bconst\b|\bvolatile\b/g,'')
+                        .replace(/\s+/g,' ').trim().split(' ');
+      if (parts.length < 2) continue;
+      let last = parts[parts.length-1];
+      let baseType = parts.slice(0,-1).join(' ');
+      let isPtr = false;
+      if (last.startsWith('*')) { isPtr = true; last = last.slice(1); }
+      else if (baseType.endsWith('*')) { isPtr = true; baseType = baseType.slice(0,-1).trim(); }
+      let arrayLen = 1;
+      const arrM = last.match(/^([A-Za-z_]\w*)\s*\[(\d+)\]$/);
+      let fname;
+      if (arrM) { fname = arrM[1]; arrayLen = parseInt(arrM[2],10); }
+      else fname = last;
+      if (!/^[A-Za-z_]\w*$/.test(fname)) continue;
+
+      let elemSize;
+      if (isPtr)                     elemSize = 2;
+      else if (baseType === 'char')  elemSize = 1;
+      else if (baseType === 'short') elemSize = 2;
+      else if (baseType === 'int')   elemSize = 2;
+      else if (baseType === 'long')  elemSize = 4;
+      else elemSize = 1;
+
+      const fieldTotalSize = elemSize * arrayLen;
+      fields.push({
+        name: fname,
+        baseType: (isPtr ? baseType+' *' : baseType),
+        elemSize, arrayLen, offset,
+        size: fieldTotalSize, isPtr,
+      });
+      offset += fieldTotalSize;
+    }
+    typedefs[name] = { fields, sizeof: offset };
+  }
+
+  const externs = [];
+  const reExtern = /extern\s+__at\s*\(\s*(0x[0-9A-Fa-f]+)\s*\)\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*(?:\[(\d+)\])?\s*;/g;
+  while ((m = reExtern.exec(clean)) !== null) {
+    externs.push({
+      addr: parseInt(m[1], 16),
+      type: m[2], name: m[3],
+      arrayLen: m[4] ? parseInt(m[4],10) : 1,
+    });
+  }
+  return { typedefs, externs };
+}
+
+/* ========================================================================
+ *  Merge symbols (repris tel quel)
+ * ====================================================================== */
+function mergeSymbols(mapSyms, hdrInfo) {
+  const byName = new Map();
+  for (const s of mapSyms) byName.set(s.name, s);
+  for (const ex of hdrInfo.externs) {
+    let entry = byName.get(ex.name);
+    if (!entry) {
+      entry = { addr: ex.addr, name: ex.name, source:'hdr' };
+      byName.set(ex.name, entry);
+    }
+    entry.type = ex.type;
+    entry.arrayLen = ex.arrayLen;
+    const td = hdrInfo.typedefs[ex.type];
+    if (td) { entry.typedef = td; entry.size = td.sizeof * ex.arrayLen; }
+  }
+  const all = [...byName.values()].sort((a,b) => a.addr - b.addr);
+
+  // Estimate size of untyped symbols = distance to next DIFFERENT address.
+  // (If we used the immediate next, aliased symbols at the same addr would get size 0 -> clamped to 1
+  //  and disappear from overlap detection.)
+  for (let i=0; i<all.length; i++) {
+    if (all[i].size) continue;
+    let j = i + 1;
+    while (j < all.length && all[j].addr === all[i].addr) j++;
+    const next = all[j];
+    all[i].size = Math.max(1, (next ? next.addr : RAM_BASE+RAM_SIZE) - all[i].addr);
+  }
+  return all;
+}
+
+/* ========================================================================
+ *  Decode a single symbol's field at addr (assumes addr is within sym range)
+ * ====================================================================== */
+function decodeSymField(sym, addr) {
+  const relTotal = addr - sym.addr;
+  if (!sym.typedef) return { sym, rel: relTotal };
+
+  const szof = sym.typedef.sizeof;
+  const arrayIdx = Math.floor(relTotal / szof);
+  const relInStruct = relTotal - arrayIdx * szof;
+
+  let field = null;
+  for (const f of sym.typedef.fields) {
+    if (relInStruct >= f.offset && relInStruct < f.offset + f.size) { field = f; break; }
+  }
+  if (!field) return { sym, rel: relTotal, arrayIdx };
+
+  const inField = relInStruct - field.offset;
+  const fieldElemIdx = field.arrayLen > 1 ? Math.floor(inField / field.elemSize) : null;
+  const byteInElem   = field.arrayLen > 1 ? inField % field.elemSize : inField;
+
+  return { sym, field, arrayIdx, fieldElemIdx, byteInElem, relTotal };
+}
+
+/* ========================================================================
+ *  Find ALL symbols overlapping a given address.
+ *  Two vars in rom.map/structures.h can share the same memory (aliasing,
+ *  struct containing sub-fields declared separately, unions, etc.)
+ *  Returns array (possibly empty), earliest addr first.
+ * ====================================================================== */
+function locateAll(symbols, addr) {
+  const matches = [];
+  // Binary search: last index with symbols[i].addr <= addr
+  let lo = 0, hi = symbols.length - 1, upper = -1;
+  while (lo <= hi) {
+    const mid = (lo+hi) >> 1;
+    if (symbols[mid].addr <= addr) { upper = mid; lo = mid+1; }
+    else hi = mid-1;
+  }
+  if (upper < 0) return matches;
+  // Linear scan back from upper — any earlier symbol whose range still contains addr counts.
+  // Symbols are typically < 1000 total, fine on mouseover.
+  for (let i = upper; i >= 0; i--) {
+    const s = symbols[i];
+    if (addr < s.addr + s.size) matches.push(decodeSymField(s, addr));
+  }
+  // Sort by start addr ascending for consistent tooltip display
+  matches.sort((a,b) => a.sym.addr - b.sym.addr || a.sym.size - b.sym.size);
+  return matches;
+}
+
+/* ========================================================================
+ *  UI helpers
+ * ====================================================================== */
+const $ = id => document.getElementById(id);
+function hex(n, w=2) { return n.toString(16).toUpperCase().padStart(w,'0'); }
+function asciiOf(v) {
+  if (v >= 32 && v < 127) return "'" + String.fromCharCode(v) + "'";
+  return '';
+}
+// xxd-style row: printable char or '.'
+function asciiRow(bin, off, count) {
+  let s = '';
+  for (let i=0; i<count; i++) {
+    const v = bin[off+i];
+    s += (v >= 32 && v < 127) ? String.fromCharCode(v) : '.';
+  }
+  return s;
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* Paint each byte with the color of the smallest containing symbol.
+ * Colors are assigned by symbol INDEX (address order) using the golden angle:
+ * consecutive symbols in RAM end up ~137.5° apart on the hue circle so
+ * neighbours never share close tones.
+ * Strategy: sort by size DESC and paint — smaller (more specific) symbols
+ * overwrite larger ones. Returns a per-byte color array or null. */
+function buildColorMap() {
+  if (!state.symbols.length) return null;
+
+  // 1) Assign a stable color per symbol based on its address-order index.
+  const colorBySym = new Map();
+  const GOLDEN = 137.508;
+  state.symbols.forEach((s, i) => {
+    const hue = (i * GOLDEN) % 360;
+    // Slight L jitter (even/odd) for extra separation when two symbols happen
+    // to overlap the same visual row.
+    const l = (i & 1) ? 24 : 20;
+    colorBySym.set(s, `hsl(${hue.toFixed(1)}, 32%, ${l}%)`);
+  });
+
+  // 2) Paint: largest first, so smaller ones overwrite and become "on top".
+  const map = new Array(RAM_SIZE).fill(null);
+  const sorted = [...state.symbols].sort((a,b) => b.size - a.size);
+  for (const s of sorted) {
+    const col = colorBySym.get(s);
+    const start = Math.max(0, s.addr - RAM_BASE);
+    const end   = Math.min(RAM_SIZE, s.addr - RAM_BASE + s.size);
+    for (let o = start; o < end; o++) map[o] = col;
+  }
+  return map;
+}
+
+// Cache of raw status data so we can re-render on LANG change.
+const statusData = { bin1: null, bin2: null, map: null, hdr: null };
+const STATUS_EL  = { bin1: 'sBin1', bin2: 'sBin2', map: 'sMap', hdr: 'sHdr' };
+
+function renderStatus(key) {
+  const s = statusData[key];
+  if (!s) return;
+  const el = $(STATUS_EL[key]);
+  if (key === 'bin1' || key === 'bin2') {
+    if (s.size !== RAM_SIZE) {
+      el.className = 'status err';
+      el.textContent = t('statusFileBad', { n: s.size, exp: RAM_SIZE });
+    } else {
+      el.className = 'status ok';
+      el.textContent = t('statusFileOk', { name: s.name, n: s.size });
+    }
+  } else if (key === 'map') {
+    el.className = 'status ok';
+    el.textContent = t('statusMapOk', { name: s.name, n: s.count });
+  } else if (key === 'hdr') {
+    el.className = 'status ok';
+    el.textContent = t('statusHdrOk', { name: s.name, a: s.structs, b: s.externs });
+  }
+}
+
+async function loadBin(input, key, statusEl) {
+  const f = input.files[0];
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  const arr = new Uint8Array(buf);
+  statusData[key] = { name: f.name, size: arr.length };
+  state[key] = arr;
+  renderStatus(key);
+  checkReady();
+}
+
+async function loadText(input, key, statusEl, statusFn) {
+  const f = input.files[0];
+  if (!f) return;
+  const txt = await f.text();
+  state[key] = txt;
+  try {
+    statusFn(f.name, txt);
+  } catch (e) {
+    statusEl.className = 'status err';
+    statusEl.textContent = '\u26A0 ' + e.message;
+    return;
+  }
+  renderStatus(key);
+  checkReady();
+}
+
+function checkReady() {
+  $('rdBtnDiff').disabled = !(state.bin1 && state.bin2);
+}
+
+/* ========================================================================
+ *  BUILD GRID
+ * ====================================================================== */
+let statsCache = null;
+
+function renderSummary(s) {
+  const sumEl = $('rdSummary');
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML =
+    `<span>${t('sumBytes', { n: s.diffCount, tot: s.len })}</span>`+
+    `<span>${t('sumPct',   { p: (s.diffCount*100/s.len).toFixed(2) })}</span>`+
+    `<span>${t('sumSymTouched', { n: s.symTouched })}</span>`+
+    `<span>${t('sumSymLoaded',  { n: s.symLoaded  })}</span>`+
+    `<span>${t('sumStructs',    { n: s.structs    })}</span>`;
+}
+
+function runDiff() {
+  // Re-parse to catch any updated files
+  const mapSyms = state.map ? parseMap(state.map) : [];
+  const hdrInfo = state.hdr ? parseHeader(state.hdr) : { typedefs:{}, externs:[] };
+  state.symbols = mergeSymbols(mapSyms, hdrInfo);
+
+  const b1 = state.bin1, b2 = state.bin2;
+  const len = Math.min(b1.length, b2.length);
+
+  let diffCount = 0;
+  const uniqueSyms = new Set();
+  for (let i=0; i<len; i++) {
+    if (b1[i] !== b2[i]) {
+      diffCount++;
+      const locs = locateAll(state.symbols, RAM_BASE + i);
+      if (locs.length === 0) uniqueSyms.add('(?)');
+      else for (const l of locs) uniqueSyms.add(l.sym.name);
+    }
+  }
+
+  statsCache = {
+    diffCount, len,
+    symTouched: uniqueSyms.size,
+    symLoaded:  state.symbols.length,
+    structs:    Object.keys(hdrInfo.typedefs).length,
+  };
+  renderSummary(statsCache);
+  renderGrid();
+}
+
+function renderGrid() {
+  const b1 = state.bin1, b2 = state.bin2;
+  const grid = $('rdGrid');
+  const colorMode = $('rdChkColorSym').checked;
+  const colorMap  = colorMode ? buildColorMap() : null;
+
+  // Build HTML in one string for speed (8192 cells)
+  const parts = [];
+  parts.push('<thead><tr><th class="addr-h" data-i18n="thAddr">'+t('thAddr')+'</th>');
+  for (let c=0; c<COLS; c++) parts.push(`<th>+${c.toString(16).toUpperCase()}</th>`);
+  parts.push('<th class="ascii-h" data-i18n="thAscii">'+t('thAscii')+'</th></tr></thead><tbody>');
+
+  for (let r=0; r<ROWS; r++) {
+    const rowAddr = RAM_BASE + r * COLS;
+    let rowHasDiff = false;
+    const cellHtml = [];
+    for (let c=0; c<COLS; c++) {
+      const off = r * COLS + c;
+      const v1 = b1[off], v2 = b2[off];
+      if (v1 !== v2) {
+        rowHasDiff = true;
+        cellHtml.push(
+          `<td class="cell diff" data-off="${off}">`+
+          `<div class="v1">${hex(v1,2)}</div>`+
+          `<div class="v2">${hex(v2,2)}</div>`+
+          `</td>`
+        );
+      } else {
+        const col = colorMap ? colorMap[off] : null;
+        const style = col ? ` style="background:${col}"` : '';
+        cellHtml.push(
+          `<td class="cell same" data-off="${off}"${style}>${hex(v1,2)}</td>`
+        );
+      }
+    }
+    // ASCII column (xxd style, printable or '.')
+    const off0 = r * COLS;
+    const a1 = esc(asciiRow(b1, off0, COLS));
+    let asciiCell;
+    if (rowHasDiff) {
+      const a2 = esc(asciiRow(b2, off0, COLS));
+      asciiCell = `<td class="ascii hasdiff"><span class="a1">${a1}</span><span class="a2">${a2}</span></td>`;
+    } else {
+      asciiCell = `<td class="ascii">${a1}</td>`;
+    }
+
+    parts.push(
+      `<tr data-hasdiff="${rowHasDiff?1:0}">`+
+      `<td class="addr">${hex(rowAddr,4)}</td>`+
+      cellHtml.join('')+
+      asciiCell+
+      '</tr>'
+    );
+  }
+  parts.push('</tbody>');
+  grid.innerHTML = parts.join('');
+
+  applyFilter();
+}
+
+function applyFilter() {
+  const onlyDiff = $('rdChkOnlyDiff').checked;
+  const trs = $('rdGrid').querySelectorAll('tbody tr');
+  for (const tr of trs) {
+    if (onlyDiff && tr.dataset.hasdiff === '0') tr.classList.add('hidden');
+    else tr.classList.remove('hidden');
+  }
+}
+
+/* ========================================================================
+ *  TOOLTIP  (event delegation on the grid)
+ * ====================================================================== */
+const tip = $('rdTooltip');
+
+function buildTooltipHTML(off) {
+  const addr = RAM_BASE + off;
+  const v1 = state.bin1[off], v2 = state.bin2[off];
+  const same = v1 === v2;
+  const locs = locateAll(state.symbols, addr);
+
+  let html = `<div class="tip-addr">0x${hex(addr,4)}</div>`;
+
+  if (same) {
+    html += `<div>${t('tipVal')} <b>0x${hex(v1,2)}</b> (${v1}) <span style="color:var(--muted)">${asciiOf(v1)}</span></div>`;
+  } else {
+    html += `<div class="tip-val1">${t('tipVal1')} <b>0x${hex(v1,2)}</b> (${v1}) ${asciiOf(v1)}</div>`;
+    html += `<div class="tip-val2">${t('tipVal2')} <b>0x${hex(v2,2)}</b> (${v2}) ${asciiOf(v2)}</div>`;
+    html += `<div style="color:var(--muted); font-size:10px">\u0394 = ${(v2-v1+256)&0xff} / signed ${((v2-v1+128)&0xff)-128}</div>`;
+  }
+
+  if (locs.length === 0) {
+    html += `<div class="tip-none">${t('tipNoSym')}</div>`;
+    return html;
+  }
+
+  if (locs.length > 1) {
+    html += `<div style="color:var(--accent); font-size:10px; margin-top:6px; border-top:1px solid var(--border); padding-top:5px; font-weight:500">${t('tipShared', { n: locs.length })}</div>`;
+  }
+
+  for (let idx = 0; idx < locs.length; idx++) {
+    const loc = locs[idx];
+    const s = loc.sym;
+
+    if (idx > 0) html += '<div style="border-top:1px dashed var(--border); margin:5px 0 3px"></div>';
+    else if (locs.length === 1) html += '<div style="margin-top:5px"></div>';
+
+    let typeStr = '';
+    if (s.type) typeStr = ` : <span class="tip-type">${s.type}${s.arrayLen>1?'['+s.arrayLen+']':''}</span>`;
+    html += `<div class="tip-sym">${s.name}${typeStr}</div>`;
+    html += `<div style="color:var(--muted); font-size:10px">${t('tipBase', { addr: hex(s.addr,4), n: s.size, off: hex(addr - s.addr,2) })}</div>`;
+
+    if (loc.field) {
+      const f = loc.field;
+      let label = f.name;
+      if (s.arrayLen > 1) label = `[${loc.arrayIdx}].${label}`;
+      if (f.arrayLen > 1) label += `[${loc.fieldElemIdx}]`;
+      if (f.elemSize > 1) {
+        const bn = loc.byteInElem === 0 ? 'lo' : (loc.byteInElem === 1 ? 'hi' : `b${loc.byteInElem}`);
+        label += `.${bn}`;
+      }
+      html += `<div class="tip-fld">\u2192 ${label} <span class="tip-type">(${f.baseType})</span></div>`;
+
+      if (f.elemSize === 2) {
+        const base = s.addr + loc.arrayIdx * s.typedef.sizeof + f.offset
+                     + (f.arrayLen > 1 ? loc.fieldElemIdx * 2 : 0);
+        const o = base - RAM_BASE;
+        if (o >= 0 && o+1 < state.bin1.length) {
+          const w1 = state.bin1[o] | (state.bin1[o+1] << 8);
+          const w2 = state.bin2[o] | (state.bin2[o+1] << 8);
+          if (w1 === w2) {
+            html += `<div class="tip-word">${t('tipWord')} 0x${hex(w1,4)} (${w1})</div>`;
+          } else {
+            html += `<div class="tip-word">${t('tipWord')} <span class="tip-val1">0x${hex(w1,4)}</span> \u2192 <span class="tip-val2">0x${hex(w2,4)}</span></div>`;
+          }
+        }
+      }
+    } else if (loc.rel !== undefined) {
+      html += `<div class="tip-fld" style="color:var(--muted)">+0x${hex(loc.rel,2)} ${t('tipNoStruct')}</div>`;
+    }
+  }
+  return html;
+}
+
+let lastHoverKey = null;
+
+function onCellEnter(cell) {
+  const off = +cell.dataset.off;
+  tip.innerHTML = buildTooltipHTML(off);
+  tip.style.display = 'block';
+
+  // Highlight the union of every matching symbol's range
+  const locs = locateAll(state.symbols, RAM_BASE + off);
+  const key = locs.map(l => l.sym.name+'@'+l.sym.addr).join('|');
+  if (key === lastHoverKey) return;
+  clearSymHighlight();
+  lastHoverKey = key;
+  if (!locs.length) return;
+
+  // Build a bitset of highlighted offsets to avoid duplicate DOM queries
+  const marked = new Uint8Array(RAM_SIZE);
+  for (const l of locs) {
+    const start = Math.max(0, l.sym.addr - RAM_BASE);
+    const end   = Math.min(RAM_SIZE, l.sym.addr - RAM_BASE + l.sym.size);
+    for (let o = start; o < end; o++) marked[o] = 1;
+  }
+  const gridEl = $('rdGrid');
+  for (let o = 0; o < RAM_SIZE; o++) {
+    if (!marked[o]) continue;
+    const c = gridEl.querySelector(`td.cell[data-off="${o}"]`);
+    if (c) c.classList.add('sym-hi');
+  }
+}
+
+function clearSymHighlight() {
+  const hi = $('rdGrid').querySelectorAll('.sym-hi');
+  for (const el of hi) el.classList.remove('sym-hi');
+}
+
+$('rdGrid').addEventListener('mouseover', e => {
+  const cell = e.target.closest('td.cell');
+  if (!cell) return;
+  onCellEnter(cell);
+});
+$('rdGrid').addEventListener('mousemove', e => {
+  if (tip.style.display !== 'block') return;
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  if (x + w > window.innerWidth)  x = e.clientX - w - pad;
+  if (y + h > window.innerHeight) y = e.clientY - h - pad;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+});
+$('rdGrid').addEventListener('mouseleave', () => {
+  tip.style.display = 'none';
+  clearSymHighlight();
+  lastHoverKey = null;
+});
+
+/* ========================================================================
+ *  WIRING
+ * ====================================================================== */
+/* ------- Native file pickers via pywebview bridge -------
+ * We hit the OS's real Open panel, with proper extension filters. Falls back
+ * to a hidden <input type="file"> if the page is opened outside pywebview
+ * (e.g. loaded directly in a browser for dev). */
+function hasNativeBridge() {
+  return !!(window.pywebview && window.pywebview.api && window.pywebview.api.open_file);
+}
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+async function pickNative(kind) {
+  const res = await window.pywebview.api.open_file(kind);
+  if (!res) return;
+  if (kind === 'bin1' || kind === 'bin2') {
+    const arr = base64ToBytes(res.data);
+    statusData[kind] = { name: res.name, size: arr.length };
+    state[kind] = arr;
+    renderStatus(kind);
+  } else if (kind === 'map') {
+    state.map = res.text;
+    const syms = parseMap(res.text);
+    statusData.map = { name: res.name, count: syms.length };
+    renderStatus('map');
+  } else if (kind === 'hdr') {
+    state.hdr = res.text;
+    const info = parseHeader(res.text);
+    statusData.hdr = { name: res.name, structs: Object.keys(info.typedefs).length, externs: info.externs.length };
+    renderStatus('hdr');
+  }
+  checkReady();
+}
+function pickFallback(kind) {
+  // Browser mode: create a throwaway <input type="file"> on the fly
+  const acceptMap = { bin1:'.bin', bin2:'.bin', map:'.map,.txt', hdr:'.h,.txt' };
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = acceptMap[kind];
+  inp.addEventListener('change', async () => {
+    const f = inp.files[0]; if (!f) return;
+    if (kind === 'bin1' || kind === 'bin2') {
+      const arr = new Uint8Array(await f.arrayBuffer());
+      statusData[kind] = { name: f.name, size: arr.length };
+      state[kind] = arr;
+      renderStatus(kind);
+    } else {
+      const txt = await f.text();
+      if (kind === 'map') {
+        state.map = txt;
+        const syms = parseMap(txt);
+        statusData.map = { name: f.name, count: syms.length };
+      } else {
+        state.hdr = txt;
+        const info = parseHeader(txt);
+        statusData.hdr = { name: f.name, structs: Object.keys(info.typedefs).length, externs: info.externs.length };
+      }
+      renderStatus(kind);
+    }
+    checkReady();
+  });
+  inp.click();
+}
+document.querySelectorAll('button.pick').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const kind = btn.dataset.pick;
+    if (hasNativeBridge()) pickNative(kind);
+    else pickFallback(kind);
+  });
+});
+$('rdBtnDiff').addEventListener('click', runDiff);
+$('rdBtnClear').addEventListener('click', () => {
+  $('rdGrid').innerHTML = '';
+  $('rdSummary').style.display = 'none';
+});
+$('rdChkOnlyDiff').addEventListener('change', applyFilter);
+$('rdChkColorSym').addEventListener('change', () => {
+  if (state.bin1 && state.bin2) renderGrid();
+});
+// btnLang is wired globally in the shared prelude
+// Register i18n callback and apply initially
+langCallbacks.push(applyLang);
+applyLang();
+
+})(); /* end RAM DIFF module */
+</script>
+</body>
+</html>
