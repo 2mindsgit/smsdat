@@ -110,4 +110,4 @@ tool shows 1280 B instead of 256 B.
 
 ## License
 
-MIT (to be confirmed)
+GPL-3.0 license
